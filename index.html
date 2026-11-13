@@ -695,21 +695,130 @@
     var beanbagScreen = null;
     (function buildBeanbag(){
       var grp = new THREE.Group(); grp.position.copy(beanbagPos); grp.rotation.y = beanbagYaw; office.add(grp);
-      var bagMat = mat(MUSTARD, 0.95);
-      // Seat cushion: a wide, LOW squashed ellipsoid whose top at the centre is
-      // exactly the 0.60 seat height the sitters are calibrated to. The old
-      // pair of centred spheres peaked at 0.79 right under the sitter, so a
-      // pelvis seated at 0.60 — and the whole thigh in front of it — ended up
-      // INSIDE the cushion, with only the shoes poking out of its front edge.
-      // The front-back radius (0.62) is much shorter than the width (0.95), so
-      // seated legs slope down clear of the front slope and feet land on the
-      // floor past the bag instead of inside it.
-      var bag = new THREE.Mesh(new THREE.SphereGeometry(0.95, 26, 20), bagMat);
-      bag.scale.set(1, 0.34, 0.65); bag.position.y = 0.277; bag.castShadow = true; bag.receiveShadow = true; grp.add(bag);
-      // Backrest blob BEHIND the sitter (local -Z) instead of a dome centred
-      // on the seat: it supports the sitter's back without swallowing the body.
-      var bagBack = new THREE.Mesh(new THREE.SphereGeometry(0.62, 22, 16), bagMat);
-      bagBack.scale.set(1.05, 0.74, 0.85); bagBack.position.set(0, 0.44, -0.55); bagBack.castShadow = true; bagBack.receiveShadow = true; grp.add(bagBack);
+      // ONE beanbag, not two balls: a single lathe-turned pear/teardrop sack
+      // (wide flat base, sides bulging out, top curving back in) whose
+      // vertices are then sculpted — a sagging seat hollow at the sit point,
+      // a backrest shoulder rising behind it, and a lowered front slope —
+      // all in one continuous cloth mass. The previous build was a squashed
+      // seat sphere plus a separate back sphere, which read as two smooth
+      // yellow balloons stuck together.
+      // Sitting calibration is preserved exactly: the hollow's floor at the
+      // sit point (group origin) is 0.60, the front reach stays ~0.62 so
+      // seated legs slope down the front and feet land on the floor past the
+      // bag, and the laptop / stool placements below are untouched.
+      var fabricC = document.createElement('canvas'); fabricC.width = fabricC.height = 512;
+      var fg = fabricC.getContext('2d');
+      fg.fillStyle = '#d9a419'; fg.fillRect(0, 0, 512, 512);
+      var frnd = 31;
+      function frand(){ frnd = (frnd * 16807) % 2147483647; return frnd / 2147483647; }
+      // Broad soft mottling — the uneven light/dark blotches of a filled
+      // fabric sack, so the colour never reads as one flat plastic wash.
+      for (var fb = 0; fb < 46; fb++){
+        var fbx = frand() * 512, fby = frand() * 512, fbr = 40 + frand() * 110;
+        var fbcol = frand() > 0.5 ? '255,232,160' : '146,102,16';
+        // draw wrapped copies too (gradient re-centred per copy), so a
+        // blotch crossing a tile edge does not end in a hard straight cut
+        // when the texture repeats
+        [-512, 0, 512].forEach(function(ox){
+          [-512, 0, 512].forEach(function(oy){
+            var fbgrad = fg.createRadialGradient(fbx + ox, fby + oy, 0, fbx + ox, fby + oy, fbr);
+            fbgrad.addColorStop(0, 'rgba(' + fbcol + ',0.13)');
+            fbgrad.addColorStop(1, 'rgba(' + fbcol + ',0)');
+            fg.fillStyle = fbgrad;
+            fg.beginPath(); fg.arc(fbx + ox, fby + oy, fbr, 0, 6.29); fg.fill();
+          });
+        });
+      }
+      // Woven canvas grain: dense over/under thread speckle.
+      for (var fs = 0; fs < 9000; fs++){
+        fg.fillStyle = frand() > 0.5 ? 'rgba(120,82,10,0.13)' : 'rgba(255,238,175,0.13)';
+        fg.fillRect(Math.floor(frand() * 512), Math.floor(frand() * 512), 2, 2);
+      }
+      fg.globalAlpha = 0.10; fg.strokeStyle = '#8a640e'; fg.lineWidth = 1;
+      for (var fw1 = 0; fw1 <= 512; fw1 += 4){ fg.beginPath(); fg.moveTo(fw1 + 0.5, 0); fg.lineTo(fw1 + 0.5, 512); fg.stroke(); }
+      fg.globalAlpha = 0.07;
+      for (var fw2 = 0; fw2 <= 512; fw2 += 4){ fg.beginPath(); fg.moveTo(0, fw2 + 0.5); fg.lineTo(512, fw2 + 0.5); fg.stroke(); }
+      fg.globalAlpha = 1;
+      // Panel seams — a real beanbag is sewn from cloth panels. On the
+      // lathe UVs a vertical canvas line runs base-to-top over the sack;
+      // with repeat.x = 3 the seams at 0 / 256 / 512 give six panels
+      // around the bag, each with a recessed groove and double stitching.
+      [0, 256, 512].forEach(function(sx){
+        fg.fillStyle = 'rgba(96,64,6,0.55)'; fg.fillRect(sx - 2, 0, 4, 512);
+        fg.fillStyle = 'rgba(255,244,200,0.20)'; fg.fillRect(sx + 2, 0, 1.5, 512);
+        fg.strokeStyle = 'rgba(110,74,10,0.85)'; fg.lineWidth = 2; fg.setLineDash([7, 5]);
+        [-8, 8].forEach(function(off){
+          fg.beginPath(); fg.moveTo(sx + off, 0); fg.lineTo(sx + off, 512); fg.stroke();
+        });
+        fg.setLineDash([]);
+      });
+      var fabricTex = new THREE.CanvasTexture(fabricC);
+      fabricTex.wrapS = fabricTex.wrapT = THREE.RepeatWrapping; fabricTex.repeat.set(3, 2);
+      fabricTex.colorSpace = THREE.SRGBColorSpace;
+      // bump kept at cloth depth (the old 0.35 carved the speckle dots into
+      // deep pits, which is what made the surface look gritty and wrong)
+      var bagMat = new THREE.MeshStandardMaterial({ map:fabricTex, bumpMap:fabricTex, bumpScale:0.02,
+        roughness:1, metalness:0 });
+      var prof = [
+        [0.0, 0.012], [0.34, 0.012], [0.58, 0.03], [0.78, 0.07], [0.90, 0.15],
+        [0.97, 0.27], [0.985, 0.38], [0.95, 0.50], [0.86, 0.60], [0.72, 0.68],
+        [0.54, 0.735], [0.34, 0.765], [0.15, 0.778], [0.0, 0.782]
+      ].map(function(p){ return new THREE.Vector2(p[0], p[1]); });
+      var bagGeo = new THREE.LatheGeometry(prof, 44);
+      (function sculptBag(){
+        var pa = bagGeo.attributes.position;
+        function cl01(v){ return v < 0 ? 0 : (v > 1 ? 1 : v); }
+        function smooth(v){ v = cl01(v); return v * v * (3 - 2 * v); }
+        for (var vi = 0; vi < pa.count; vi++){
+          var vx = pa.getX(vi), vy = pa.getY(vi), vz = pa.getZ(vi);
+          // elliptical footprint: front reach ~0.61, deeper back mass ~0.79
+          vz = vz > 0 ? vz * 0.62 : vz * 0.80;
+          var ty = cl01((vy - 0.30) / 0.45);          // top-surface weight
+          var dzc = vz + 0.06, rr = Math.sqrt(vx * vx + dzc * dzc);
+          vy -= 0.185 * Math.exp(-(rr * rr) / 0.20) * ty;              // seat hollow -> 0.60 at centre
+          var backF = smooth((-vz) / 0.55);
+          vy += 0.37 * backF * cl01((vy - 0.25) / 0.5) * Math.exp(-(vx * vx) / 1.1); // backrest shoulder
+          var frontF = cl01((vz - 0.05) / 0.5);
+          vy -= 0.16 * frontF * ty;                                    // front slope drops away for the legs
+          // faint bead-fill lumpiness so the cloth never reads as smooth plastic
+          var phi = Math.atan2(vx, vz);
+          var lump = 0.011 * Math.sin(phi * 9 + vy * 13) + 0.007 * Math.sin(phi * 17 - vy * 21);
+          var rl = Math.sqrt(vx * vx + vz * vz);
+          if (rl > 0.05 && vy > 0.08 && vy < 0.62){ vx += (vx / rl) * lump; vz += (vz / rl) * lump; }
+          pa.setXYZ(vi, vx, vy, vz);
+        }
+        bagGeo.computeVertexNormals();
+      })();
+      var bag = new THREE.Mesh(bagGeo, bagMat);
+      bag.castShadow = true; bag.receiveShadow = true; grp.add(bag);
+      // cloth details in a slightly darker mustard: piping around the widest
+      // bulge, a seam ring around the seat hollow, and three soft creases
+      // running down the front slope like folds in filled fabric
+      var seamMat = mat(0xa87c14, 1);
+      function seamTube(pts, rad, closed){
+        var curve = new THREE.CatmullRomCurve3(pts, !!closed);
+        var m = new THREE.Mesh(new THREE.TubeGeometry(curve, closed ? 64 : 20, rad, 6, !!closed), seamMat);
+        m.castShadow = false; m.receiveShadow = true; grp.add(m); return m;
+      }
+      var pipePts = [];
+      for (var pA = 0; pA < 28; pA++){
+        var pAng = pA / 28 * Math.PI * 2, pSin = Math.sin(pAng);
+        pipePts.push(new THREE.Vector3(Math.cos(pAng) * 0.972, 0.335, pSin * (pSin > 0 ? 0.598 : 0.772)));
+      }
+      seamTube(pipePts, 0.013, true);
+      var rimPts = [];
+      for (var rA = 0; rA < 24; rA++){
+        var rAng = rA / 24 * Math.PI * 2, rSin = Math.sin(rAng);
+        rimPts.push(new THREE.Vector3(Math.cos(rAng) * 0.385, 0.615 + (rSin < 0 ? 0.20 * rSin * rSin : -0.045 * rSin) + 0.012, -0.04 + rSin * 0.315));
+      }
+      seamTube(rimPts, 0.009, true);
+      [-0.21, 0, 0.21].forEach(function(cx){
+        seamTube([
+          new THREE.Vector3(cx * 0.8, 0.615, 0.315),
+          new THREE.Vector3(cx, 0.50, 0.475),
+          new THREE.Vector3(cx * 1.15, 0.375, 0.565)
+        ], 0.0075, false);
+      });
       // Laptop ON the sitter's lap, sized for the 2.28-tall VRoid cast: the
       // base rests on the near-horizontal thighs (top ~0.78 in front of the
       // hips at 0.72), keyboard deck up, screen hinged at the FAR edge and
