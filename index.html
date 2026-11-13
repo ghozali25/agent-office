@@ -638,17 +638,71 @@
     /* ---------- desks & mustard roller chairs ---------- */
     function screenTexture(hue){
       var c = document.createElement('canvas'); c.width = 256; c.height = 176;
-      var g = c.getContext('2d');
-      g.fillStyle = '#101c28'; g.fillRect(0,0,256,176);
-      g.fillStyle = hue; g.fillRect(0,0,256,26);
-      for (var i=0;i<9;i++){
-        var wdt = 40 + ((i*53)%130);
-        g.globalAlpha = 0.4 + ((i*29)%50)/100;
-        g.fillStyle = ['#e8f2ff','#8fd8ff','#ffd98f','#b8f2c9'][i%4];
-        g.fillRect(14 + (i%3)*10, 42 + i*14, wdt, 6);
+      // A small "program" per screen: ~30 lines of code-like bars with
+      // varied indents, generated once (seeded by the hue, so every screen
+      // differs). drawScreenLive replays it with a typing cursor and an
+      // upward scroll while the screen is lit — the texture is only ever
+      // redrawn a few times a second, never per frame.
+      var seed = 7; for (var hi = 0; hi < hue.length; hi++) seed = (seed * 31 + hue.charCodeAt(hi)) % 9973;
+      function srnd(){ seed = (seed * 16807) % 2147483647; return seed / 2147483647; }
+      var lines = [];
+      for (var i = 0; i < 30; i++){
+        var segs = [], n = 1 + Math.floor(srnd() * 3), x = (srnd() < 0.3 ? 0 : Math.floor(srnd() * 3)) * 12;
+        for (var s2 = 0; s2 < n; s2++){
+          var w = 18 + srnd() * 62;
+          segs.push({ x:x, w:w, col:['#e8f2ff','#8fd8ff','#ffd98f','#b8f2c9','#f2a7c3'][Math.floor(srnd() * 5)] });
+          x += w + 8;
+        }
+        lines.push({ segs:segs, blank: srnd() < 0.14 });
       }
-      g.globalAlpha = 1;
-      var t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
+      var t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace;
+      t.userData = { canvas:c, hue:hue, lines:lines, scroll:0, typeP:0 };
+      drawScreenLive(t.userData, null, 0, 0);
+      return t;
+    }
+    /* Redraws ONE lit screen's canvas. The header bar stays put; in the
+       code window the bottom (active) line "types" — its bars grow with
+       a blinking block cursor at the typing point — and when the line
+       completes, the whole view scrolls up one line and the next starts.
+       Typing advances only during the owner's typing phase (the mouse
+       phase leaves the cursor blinking in place), which keeps the screen
+       in step with the work cycle. Sleeping screens are never redrawn:
+       updateScreens calls this a few times a second for lit screens only. */
+    function drawScreenLive(u, a, dt, tt){
+      var g = u.canvas.getContext('2d');
+      var typing = !a || !a.cyc || a.cyc.phase === 'type';
+      if (typing && dt > 0) u.typeP += dt * 0.55;
+      if (u.typeP >= 1){ u.typeP = 0; u.scroll += 1; }
+      g.fillStyle = '#101c28'; g.fillRect(0, 0, 256, 176);
+      g.fillStyle = u.hue; g.fillRect(0, 0, 256, 26);
+      g.fillStyle = 'rgba(255,255,255,0.8)';
+      [12, 26, 40].forEach(function(cx){ g.beginPath(); g.arc(cx, 13, 4, 0, 6.29); g.fill(); });
+      var lineH = 13, top = 38, rows = 10;
+      var base = Math.floor(u.scroll);
+      for (var r = 0; r < rows; r++){
+        var ln = u.lines[(base + r) % u.lines.length];
+        var y = top + r * lineH;
+        var isActive = (r === rows - 1);
+        if (isActive){ g.fillStyle = 'rgba(140,190,255,0.10)'; g.fillRect(6, y - 2, 244, lineH); }
+        var lastSeg = ln.segs[ln.segs.length - 1];
+        var span = lastSeg ? lastSeg.x + lastSeg.w : 0;
+        var typeX = u.typeP * (span + 26);
+        if (!ln.blank){
+          for (var s = 0; s < ln.segs.length; s++){
+            var sg = ln.segs[s], dw = sg.w;
+            if (isActive){
+              if (typeX <= sg.x) dw = 0;
+              else if (typeX < sg.x + sg.w) dw = typeX - sg.x;
+            }
+            if (dw > 0.5){ g.globalAlpha = 0.85; g.fillStyle = sg.col; g.fillRect(14 + sg.x, y, dw, 6); }
+          }
+          g.globalAlpha = 1;
+        }
+        if (isActive && (tt * 1.5) % 1 < 0.6){
+          g.fillStyle = '#e8f2ff';
+          g.fillRect(Math.min(246, 15 + typeX), y - 1, 6, 9); // blinking block cursor
+        }
+      }
     }
     /* Sleep face for every screen: near-black glass with one small amber
        standby dot, like a real monitor in standby. Screens swap to this
@@ -984,6 +1038,7 @@
         phase:Math.random()*6.28, task:null, spot:null, idleSpot:null, statusText:'Santai',
         tag:null, seatPos:null, homeDrop:0, bagLeaving:false, bagSeating:false, bagFrom:null,
         scene:null, sceneSeat:null, sleepAmt:0, readAmt:0, coffeeAmt:0,
+        cupHold:0, sipAmt:0, cupCyc:null, cupRest:null,
         bookProp:null, cupProp:null, zzz:null, propK:1 };
     }
 
@@ -1251,15 +1306,26 @@
       _qq.setFromEuler(_qe.set(x, y, z));
       b.quaternion.copy(r).multiply(_qq);
     }
-    /* ----- desk-work arm aiming (VRoid) -----
-       Two-bone IK in world space: the wrist is aimed at a target (keyboard
-       home row, or the mouse on its pad) and the elbow is placed by the bend
-       solve with a down/out/back hint, so a working agent's hands genuinely
-       rest on the desk instead of hanging beside the chair. Bone world
-       orientations are derived from the rest directions measured in
-       setupVRM, then blended with the regular Euler pose by a.armAim so
-       entering/leaving the pose never pops. */
-    function aimArmSide(a, D, side, wristG, amt){
+    /* ----- arm aiming (VRoid): one two-bone IK for every hands-on pose --
+       Two-bone IK in world space: the wrist is aimed at a target and the
+       elbow is placed by the bend solve with a per-pose hint, so the hands
+       genuinely land where the pose wants them instead of hanging beside
+       the chair. Bone world orientations are derived from the rest
+       directions measured in setupVRM, then blended with the regular
+       Euler pose by amt so entering/leaving a pose never pops.
+       aimArmsAll blends three target sets by their pose amounts:
+         work  : keyboard home row / mouse on its pad (a.armAim).
+         sleep : wrists CROSSED on the desktop in front of the torso —
+                 left wrist over to the right side and vice versa, the
+                 right one a touch higher so the forearms read as stacked
+                 — with an out/down/forward elbow hint that flares the
+                 elbows onto the desk at the body's sides; the slumped
+                 head comes down onto that forearm stack.
+         read  : both wrists at the book prop's two bottom corners, so
+                 the hands visibly hold the book in front of the chest,
+                 elbows bent and tucked down beside the body — no arm
+                 stretched straight out to one side ever again. */
+    function aimArmSide(a, D, side, wristG, amt, hintV){
       var B = D.bones;
       var up = side === 'L' ? B.upperArmL : B.upperArmR;
       var lo = side === 'L' ? B.lowerArmL : B.lowerArmR;
@@ -1277,7 +1343,7 @@
       var toW = W.clone().sub(S);
       var d = Math.min(toW.length(), (L1 + L2) * 0.985);
       var m = toW.normalize();
-      var hint = new THREE.Vector3(side === 'L' ? 0.38 : -0.38, -1, -0.30).applyQuaternion(gq);
+      var hint = (hintV || new THREE.Vector3(side === 'L' ? 0.38 : -0.38, -1, -0.30)).clone().applyQuaternion(gq);
       hint.sub(m.clone().multiplyScalar(hint.dot(m)));
       if (hint.lengthSq() < 1e-6) hint.set(0, -1, 0); else hint.normalize();
       var cosA = Math.max(-1, Math.min(1, (L1*L1 + d*d - L2*L2) / (2*L1*d)));
@@ -1295,43 +1361,100 @@
       lo.quaternion.copy(pq2.invert().multiply(wq2));
       if (amt < 1){ up.quaternion.slerp(eU, 1 - amt); lo.quaternion.slerp(eL, 1 - amt); }
     }
-    function aimArms(a, D, t){
+    function aimArmsAll(a, D, t, slpF, rdF, cofF){
+      var wWork = a.armAim, wSlp = slpF, wRd = rdF, wCof = cofF;
+      var tot = wWork + wSlp + wRd;  // modes that pose BOTH arms
+      var totR = tot + wCof;         // the right arm also answers to coffee
+      if (totR < 0.01 || !D.jShoulderL) return;
       a.group.updateMatrixWorld(true);
-      var cyc = a.cyc, mA = cyc.mouseAmt;
-      // Wrist targets in agent-group space (the group sits at the chair,
-      // facing the desk; local +Z is toward the desk, local -X is the
-      // agent's right after the PI yaw), derived from the ACTUAL desk
-      // meshes in makeDesk, converted chair-relative:
-      //   keyboard mesh: desk-local centre (0.05, 0.82, 0.16), size
-      //     0.62 x 0.035 x 0.22 -> top surface y = 0.8375, centre lands at
-      //     local (-0.05, 0.86), spanning x [-0.36, 0.26], z [0.75, 0.97].
-      //   mouse mesh: desk-local centre (0.58, 0.834, 0.17), size
-      //     0.115 x 0.05 x 0.185 -> top y = 0.859, centre local (-0.58, 0.85).
-      // The IK aims the WRIST joint, but contact is made by the PALM, which
-      // rides ~0.10 past the wrist along the forearm and ~0.04 below it.
-      // So each wrist target sits 0.10 BEHIND its contact patch and 0.04
-      // ABOVE the surface: palm centred on the keys / on the mouse body,
-      // fingertips ending at z ~0.94 — still on the keyboard, never past
-      // it toward the monitor (the old targets put the wrist itself on
-      // the patch, so the whole hand overshot a hand-length beyond it).
-      // Combined with the seated forward slide in updateVRM, both targets
-      // are now inside the arm's measured reach (~0.64 needed vs ~0.80
-      // available), so the elbow keeps a natural bend and the hand truly
-      // rests on the surface instead of reaching into the air.
-      var tapL = Math.abs(Math.sin(t*11 + cyc.seed*7)) * 0.042 * (1 - mA);
-      var tapR = Math.abs(Math.sin(t*11 + cyc.seed*7 + Math.PI)) * 0.042 * (1 - mA);
-      var wL = new THREE.Vector3(0.09, 0.878 + tapL, 0.76);
-      var wR = new THREE.Vector3(-0.17, 0.878 + tapR, 0.76);
-      if (mA > 0.001){
-        var clickDip = (cyc.phase === 'mouse' && cyc.clickT < 0.12) ? Math.sin(cyc.clickT / 0.12 * Math.PI) * 0.026 : 0;
-        var mouseR = new THREE.Vector3(
-          -0.52 + Math.sin(t*1.7 + cyc.seed*3) * 0.015,
-          0.902 - clickDip,
-          0.76 + Math.cos(t*1.3 + cyc.seed*5) * 0.018);
-        wR.lerp(mouseR, mA);
+      var wL = new THREE.Vector3(), wR = new THREE.Vector3();
+      var hL = new THREE.Vector3(), hR = new THREE.Vector3();
+      function blend(w, tgtL, tgtR, hintL, hintR){
+        if (w < 0.001) return;
+        if (tgtL){ wL.addScaledVector(tgtL, w); hL.addScaledVector(hintL, w); }
+        if (tgtR){ wR.addScaledVector(tgtR, w); hR.addScaledVector(hintR, w); }
       }
-      aimArmSide(a, D, 'L', wL, a.armAim);
-      aimArmSide(a, D, 'R', wR, a.armAim);
+      if (wWork > 0.001){
+        var cyc = a.cyc, mA = cyc.mouseAmt;
+        // Wrist targets in agent-group space (the group sits at the chair,
+        // facing the desk; local +Z is toward the desk, local -X is the
+        // agent's right after the PI yaw), derived from the ACTUAL desk
+        // meshes in makeDesk, converted chair-relative:
+        //   keyboard mesh: desk-local centre (0.05, 0.82, 0.16), size
+        //     0.62 x 0.035 x 0.22 -> top surface y = 0.8375, centre lands at
+        //     local (-0.05, 0.86), spanning x [-0.36, 0.26], z [0.75, 0.97].
+        //   mouse mesh: desk-local centre (0.58, 0.834, 0.17), size
+        //     0.115 x 0.05 x 0.185 -> top y = 0.859, centre local (-0.58, 0.85).
+        // The IK aims the WRIST joint, but contact is made by the PALM, which
+        // rides ~0.10 past the wrist along the forearm and ~0.04 below it.
+        // So each wrist target sits 0.10 BEHIND its contact patch and 0.04
+        // ABOVE the surface: palm centred on the keys / on the mouse body,
+        // fingertips ending at z ~0.94 — still on the keyboard, never past
+        // it toward the monitor (the old targets put the wrist itself on
+        // the patch, so the whole hand overshot a hand-length beyond it).
+        // Combined with the seated forward slide in updateVRM, both targets
+        // are now inside the arm's measured reach (~0.64 needed vs ~0.80
+        // available), so the elbow keeps a natural bend and the hand truly
+        // rests on the surface instead of reaching into the air.
+        var tapL = Math.abs(Math.sin(t*11 + cyc.seed*7)) * 0.042 * (1 - mA);
+        var tapR = Math.abs(Math.sin(t*11 + cyc.seed*7 + Math.PI)) * 0.042 * (1 - mA);
+        var kwL = new THREE.Vector3(0.09, 0.878 + tapL, 0.76);
+        var kwR = new THREE.Vector3(-0.17, 0.878 + tapR, 0.76);
+        if (mA > 0.001){
+          var clickDip = (cyc.phase === 'mouse' && cyc.clickT < 0.12) ? Math.sin(cyc.clickT / 0.12 * Math.PI) * 0.026 : 0;
+          var mouseR = new THREE.Vector3(
+            -0.52 + Math.sin(t*1.7 + cyc.seed*3) * 0.015,
+            0.902 - clickDip,
+            0.76 + Math.cos(t*1.3 + cyc.seed*5) * 0.018);
+          kwR.lerp(mouseR, mA);
+        }
+        blend(wWork, kwL, kwR,
+          new THREE.Vector3(0.38, -1, -0.30), new THREE.Vector3(-0.38, -1, -0.30));
+      }
+      if (wSlp > 0.001){
+        // Sleeping at the desk: BOTH forearms fold up onto the desktop in
+        // front of the torso and CROSS — the left wrist lands on the right
+        // side of centre and the right wrist on the left, a touch higher,
+        // so the forearms read as stacked on the surface (desktop top is
+        // y 0.795 here; the keyboard patch starts at z 0.75, so the stack
+        // sits just in front of it, under where the slumped head lands).
+        // The elbow hint flares out/down/forward so the elbows plant on
+        // the desk at the body's sides instead of dangling by the chair.
+        blend(wSlp,
+          new THREE.Vector3(-0.15, 0.85, 0.70), new THREE.Vector3(0.15, 0.89, 0.65),
+          new THREE.Vector3(0.95, -0.45, 0.30), new THREE.Vector3(-0.95, -0.45, 0.30));
+      }
+      if (wRd > 0.001){
+        // Reading: the book prop rides centred in front of the chest
+        // (animateAgent parks it at bookY/bookZ, tilted up to the face);
+        // both wrists aim at its two bottom corners — derived from the
+        // prop's real geometry (0.37 wide x 1.35 scale, near edge swung
+        // down-toward the reader by its -0.52 tilt) — so the hands visibly
+        // HOLD the book, elbows bent and tucked down beside the body.
+        var bkY = a.bookY || [1.42, 0.95];
+        var yB = bkY[0] + (bkY[1] - bkY[0]) * a.sit;
+        var zB = a.bookZ || 0.46;
+        blend(wRd,
+          new THREE.Vector3(0.27, yB - 0.13, zB - 0.16), new THREE.Vector3(-0.27, yB - 0.13, zB - 0.16),
+          new THREE.Vector3(0.35, -1, -0.05), new THREE.Vector3(-0.35, -1, -0.05));
+      }
+      if (tot > 0.001) aimArmSide(a, D, 'L', wL.multiplyScalar(1 / tot), Math.min(1, tot), hL);
+      if (wCof > 0.001){
+        // Coffee (right hand only): while the cup sits on the table the
+        // hand rests on the lap; once the drinking cycle takes hold
+        // (a.cupHold) the wrist tracks the cup itself — reach, lift, sip
+        // and set-down all follow the prop's actual position that frame.
+        var lapR = new THREE.Vector3(-0.24, 0.74, 0.34);
+        var cupT = lapR;
+        var hold = a.cupHold || 0;
+        if (hold > 0.001 && a.cupProp){
+          var cp = a.cupProp.position;
+          cupT = lapR.clone().lerp(new THREE.Vector3(cp.x - 0.10, cp.y - 0.05, cp.z - 0.05), hold);
+        }
+        wR.addScaledVector(cupT, wCof);
+        hR.addScaledVector(new THREE.Vector3(-0.42, -1, -0.12), wCof);
+      }
+      if (totR > 0.001) aimArmSide(a, D, 'R', wR.multiplyScalar(1 / totR), Math.min(1, totR), hR);
     }
 
     function updateVRM(a, dt, t){
@@ -1405,8 +1528,11 @@
       var lean = a.armAim;
       // Idle-scene pose amounts (blended in animateAgent): sleeping at the
       // desk slumps the whole upper body forward until the head rests on
-      // folded arms; reading raises the forearms to hold the book with the
-      // head bowed to it; coffee lifts the right forearm with the cup.
+      // folded arms; reading bows the head to the book. The HANDS for all
+      // three scenes are placed by the arm IK in aimArmsAll (crossed stack
+      // on the desk / book's bottom corners / the coffee cup); the Euler
+      // coffee lift below only bridges the blend-in and fades out as the
+      // IK takes the right arm over completely.
       var slpF = (a.sleepAmt || 0) * sitF;
       var rdF = a.readAmt || 0;
       var cofF = a.coffeeAmt || 0;
@@ -1415,14 +1541,14 @@
       // startle snap: while the cling reaction runs, the head jerks up and
       // back with a tiny fast tremble, then settles into the normal pose
       var stEnv = a.startleEnv || 0;
-      poseBone(D, B.head, -0.10*sitF + Math.sin(t*0.8 + a.phase)*0.03*(1 - slpF) + (a.glanceAmt || 0) * lean * 0.26 - stEnv*0.34 + 0.58*slpF + 0.36*rdF + Math.sin(t*1.15 + a.phase)*0.025*slpF,
+      poseBone(D, B.head, -0.10*sitF + Math.sin(t*0.8 + a.phase)*0.03*(1 - slpF) + (a.glanceAmt || 0) * lean * 0.26 - stEnv*0.34 + 0.58*slpF + 0.36*rdF - 0.24*(a.sipAmt || 0) + Math.sin(t*1.15 + a.phase)*0.025*slpF,
         Math.sin(t*0.45 + a.phase*2)*0.16*(1 - sitF*0.5)*(1 - 0.85*slpF - 0.4*rdF) + (stEnv > 0 ? Math.sin(t*42 + a.phase)*0.07*stEnv : 0), stEnv*0.14 + slpF*0.18);
       var armDown = (1.22 - cf * 2.35) * (1 - 0.38*rdF) - 0.10*slpF;
       var armFwd = 0.12 + 0.5*sitF + 0.62*slpF + 0.34*rdF;
       poseBone(D, B.upperArmL, armFwd + (walking ? sw*0.4 : 0) + (typing ? Math.sin(t*10 + a.phase)*0.05 : 0), 0, armDown);
-      poseBone(D, B.upperArmR, armFwd + (walking ? -sw*0.4 : 0) + (typing ? Math.cos(t*11 + a.phase)*0.05 : 0) + 0.22*cofF, 0, -armDown);
+      poseBone(D, B.upperArmR, armFwd + (walking ? -sw*0.4 : 0) + (typing ? Math.cos(t*11 + a.phase)*0.05 : 0) + 0.22*cofF*(1 - cofF), 0, -armDown);
       poseBone(D, B.lowerArmL, 0.25 + 0.55*sitF + (typing ? Math.sin(t*12.3 + a.phase)*0.07 : 0) + 0.30*slpF + 0.95*rdF, 0, 0.08 + cf*0.6 + 0.55*slpF + 0.28*rdF);
-      poseBone(D, B.lowerArmR, 0.25 + 0.55*sitF + (typing ? Math.cos(t*10.7 + a.phase)*0.07 : 0) + 0.30*slpF + 0.95*rdF + 0.60*cofF, 0, -0.08 - cf*0.6 - 0.55*slpF - 0.28*rdF);
+      poseBone(D, B.lowerArmR, 0.25 + 0.55*sitF + (typing ? Math.cos(t*10.7 + a.phase)*0.07 : 0) + 0.30*slpF + 0.95*rdF + 0.60*cofF*(1 - cofF), 0, -0.08 - cf*0.6 - 0.55*slpF - 0.28*rdF);
       var hop = (cf > 0.03 && !walking) ? Math.abs(Math.sin(t*9)) * 0.07 * cf : 0;
       var sitDrop = Math.max(0, (D.hipsY || 0.76) - seatY) * sitF;
       D.root.position.y = -sitDrop + (walking ? Math.abs(Math.sin(a.phase))*0.03 : 0) + hop;
@@ -1437,14 +1563,15 @@
       // reach with a naturally bent elbow. The beanbag seat is excluded
       // via bagF: its calibration is unchanged.
       D.root.position.z = 0.17 * sitF * (1 - bagF);
-      if (a.armAim > 0.01 && D.jShoulderL) aimArms(a, D, t);
+      aimArmsAll(a, D, t, slpF, rdF, cofF);
       // Relaxed finger curl, blended with the desk-work pose: fingers fold
       // gently (proximal + middle joints, thumb less) so the hands settle
       // onto the keys / over the mouse with fingers together, not splayed
       // flat toward the monitor.
-      if (D.fingers && a.armAim > 0.01){
+      var gripAmt = Math.max(a.armAim, rdF * 0.85, slpF * 0.45, (a.cupHold || 0) * 0.9);
+      if (D.fingers && gripAmt > 0.01){
         D.fingers.forEach(function(f){
-          var c = (f.seg === 1 ? 0.5 : 0.65) * a.armAim * (f.thumb ? 0.55 : 1);
+          var c = (f.seg === 1 ? 0.5 : 0.65) * gripAmt * (f.thumb ? 0.55 : 1);
           poseBone(D, f.b, 0, 0, (f.side === 'L' ? 1 : -1) * c);
         });
       }
@@ -1555,6 +1682,11 @@
       a.scene = null;
       if (a.bookProp) a.bookProp.visible = false;
       if (a.cupProp) a.cupProp.visible = false;
+      // Coffee-cycle state goes with the scene: a cup interrupted mid-sip
+      // is cleared away with the rest of the scene props (never carried
+      // into work), and the next coffee scene starts its cycle fresh.
+      a.cupCyc = null; a.cupRest = null; a.cupHold = 0; a.sipAmt = 0;
+      if (a.cupProp) a.cupProp.rotation.set(0, 0, 0);
       if (a.sceneSeat){ a.sceneSeat.taken = null; a.sceneSeat = null; }
     }
     function claimSeat(a){
@@ -2072,6 +2204,18 @@
         if (Math.abs(target - u.onAmt) < 0.01) u.onAmt = target;
         var wantMap = u.onAmt > 0.5 ? u.litTex : SLEEP_TEX;
         if (m.map !== wantMap){ m.map = wantMap; m.emissiveMap = wantMap; }
+        // Live content on lit screens only: redraw the code canvas a few
+        // times a second (typing + scrolling, synced to the owner's work
+        // cycle); a sleeping screen keeps the frozen standby face and its
+        // code canvas is left untouched until it wakes again.
+        if (u.onAmt > 0.5 && u.litTex.userData && u.litTex.userData.canvas){
+          u.animT = (u.animT || 0) + dt;
+          if (u.animT > 0.18){
+            drawScreenLive(u.litTex.userData, a, u.animT, t);
+            u.litTex.needsUpdate = true;
+            u.animT = 0;
+          }
+        }
         var base = u.cur !== undefined ? u.cur : u.base;
         var flick = working ? Math.sin(t*7 + i)*0.1 : 0;
         m.emissiveIntensity = Math.max(0, u.onAmt * (base + flick));
@@ -2195,9 +2339,78 @@
         a.bookProp.position.set(0, bkY[0] + (bkY[1] - bkY[0]) * a.sit, a.bookZ || 0.31);
         a.bookProp.rotation.x = -0.52;
       }
+      // Coffee cup: in transit (the walk from the machine) it rides at the
+      // fixed carry anchor like before. Once the agent is SEATED at the
+      // meeting table (drink phase), the cup lives ON the table — its base
+      // resting on the tabletop at a.cupRest — and a drinking cycle runs:
+      // rest a few seconds (hands relaxed), reach & grasp, lift to the
+      // mouth, sip ~1 s with the cup tipped and the head tipped back,
+      // lower it back onto the table, release, repeat with a fresh random
+      // pause. a.cupHold / a.sipAmt are consumed by updateVRM: the right
+      // hand tracks the cup through the IK, the head tips back to sip.
+      var cupSettled = a.cupProp && a.cupProp.visible && a.scene && a.scene.kind === 'coffee' &&
+        a.scene.phase === 'drink' && !a.path.length && a.sit > 0.6;
       if (a.cupProp && a.cupProp.visible){
-        var cpP = a.cupPos || { x:0.24, y:0.97, ys:0.82, z:0.27 };
-        a.cupProp.position.set(cpP.x, cpP.y + (cpP.ys - cpP.y) * a.sit, cpP.z);
+        if (cupSettled){
+          if (!a.cupRest){
+            // World point on the tabletop (surface y 0.48; the cup group's
+            // origin sits half the scaled cup height — 0.064 — above its
+            // base), pulled toward this agent's seat from the table centre
+            // and converted into group space; a touch to the right side.
+            var ccW = new THREE.Vector3(TABLE_C.x, 0, TABLE_C.z);
+            var sdW = a.group.position.clone().sub(ccW); sdW.y = 0;
+            if (sdW.lengthSq() < 0.01) sdW.set(0, 0, 1); sdW.normalize();
+            var rwW = ccW.clone().addScaledVector(sdW, 0.36); rwW.y = 0.48 + 0.064;
+            a.group.updateMatrixWorld(true);
+            a.cupRest = a.group.worldToLocal(rwW);
+            a.cupRest.x -= 0.13;
+          }
+          var cyc2 = a.cupCyc || (a.cupCyc = { phase:'rest', t:1.2 + Math.random()*2.5 });
+          cyc2.t -= dtW;
+          var mouthP = { x:-0.10, y:1.40, z:0.36 };
+          var cupPos = a.cupRest, cupTilt = 0, holdTgt = 0, sipTgt = 0;
+          if (cyc2.phase === 'rest'){
+            if (cyc2.t <= 0){ cyc2.phase = 'reach'; cyc2.t = 0.45; }
+          } else if (cyc2.phase === 'reach'){
+            holdTgt = 1;
+            if (cyc2.t <= 0){ cyc2.phase = 'lift'; cyc2.t = 0.6; }
+          } else if (cyc2.phase === 'lift'){
+            holdTgt = 1;
+            var lpA = 1 - Math.max(0, cyc2.t) / 0.6; lpA = lpA*lpA*(3 - 2*lpA);
+            cupPos = new THREE.Vector3(
+              a.cupRest.x + (mouthP.x - a.cupRest.x) * lpA,
+              a.cupRest.y + (mouthP.y - a.cupRest.y) * lpA + Math.sin(lpA * Math.PI) * 0.05,
+              a.cupRest.z + (mouthP.z - a.cupRest.z) * lpA);
+            cupTilt = -0.18 * lpA;
+            if (cyc2.t <= 0){ cyc2.phase = 'sip'; cyc2.t = 1.0 + Math.random()*0.4; }
+          } else if (cyc2.phase === 'sip'){
+            holdTgt = 1; sipTgt = 1;
+            cupPos = new THREE.Vector3(mouthP.x, mouthP.y, mouthP.z);
+            cupTilt = -0.52;
+            if (cyc2.t <= 0){ cyc2.phase = 'lower'; cyc2.t = 0.6; }
+          } else if (cyc2.phase === 'lower'){
+            holdTgt = 1;
+            var lpB = Math.max(0, cyc2.t) / 0.6; lpB = lpB*lpB*(3 - 2*lpB);
+            cupPos = new THREE.Vector3(
+              a.cupRest.x + (mouthP.x - a.cupRest.x) * lpB,
+              a.cupRest.y + (mouthP.y - a.cupRest.y) * lpB + Math.sin(lpB * Math.PI) * 0.05,
+              a.cupRest.z + (mouthP.z - a.cupRest.z) * lpB);
+            cupTilt = -0.18 * lpB;
+            if (cyc2.t <= 0){ cyc2.phase = 'release'; cyc2.t = 0.4; }
+          } else { // release: hand lets go, then a fresh random rest
+            if (cyc2.t <= 0){ cyc2.phase = 'rest'; cyc2.t = 2.5 + Math.random()*3.5; }
+          }
+          a.cupHold += (holdTgt - a.cupHold) * Math.min(1, dtW * 7);
+          a.sipAmt += (sipTgt - a.sipAmt) * Math.min(1, dtW * 6);
+          a.cupProp.position.copy(cupPos);
+          a.cupProp.rotation.set(cupTilt, 0, 0);
+        } else {
+          var cpP = a.cupPos || { x:0.24, y:0.97, ys:0.82, z:0.27 };
+          a.cupProp.position.set(cpP.x, cpP.y + (cpP.ys - cpP.y) * a.sit, cpP.z);
+          a.cupProp.rotation.set(0, 0, 0);
+          a.cupHold += (0 - a.cupHold) * Math.min(1, dtW * 7);
+          a.sipAmt += (0 - a.sipAmt) * Math.min(1, dtW * 6);
+        }
       }
       var sit = a.sit;
       a.hips.position.y = 0.31 - sit*0.02 - a.drop;
