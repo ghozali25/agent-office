@@ -49,6 +49,16 @@
       .tag .bar i{ display:block; height:100%; width:0%; background:#57e6b8; border-radius:2px; }
       .tag.working .bar{ display:block; }
       .tag .dot{ display:inline-block; width:7px; height:7px; border-radius:50%; margin-right:5px; vertical-align:1px; }
+      .bang{
+        position:absolute; left:0; top:0; width:52px; height:52px;
+        pointer-events:none; will-change:transform; z-index:4;
+      }
+      .bang svg{ position:absolute; inset:0; width:100%; height:100%; filter:drop-shadow(0 4px 8px rgba(0,0,0,.3)); }
+      .bang span{
+        position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+        font-weight:900; font-size:21px; color:#2a1608; letter-spacing:-2px; line-height:1;
+        transform:rotate(-7deg);
+      }
 
       #topbar{
         position:absolute; top:10px; left:10px; right:10px; z-index:5;
@@ -200,7 +210,7 @@
 
       <aside id="panel">
         <h1>Kantor Virtual 3D</h1>
-        <p class="sub">Diorama kantor chibi dalam satu ruangan hangat: lima agen AI bekerja di meja berkursi mustard dan beanbag besar. Jendela beralih dari siang berbukit hijau ke malam berlampu gedung — kantor ini bekerja 24/7. Setiap tugas yang kamu kirim disambut bunyi <b>“cling”</b> dan toast di layar.</p>
+        <p class="sub">Diorama kantor chibi dalam satu ruangan hangat: lima agen AI bekerja di meja berkursi mustard dan beanbag besar. Jendela beralih dari siang berbukit hijau ke malam berlampu gedung — kantor ini bekerja 24/7. Setiap tugas yang kamu kirim disambut bunyi <b>“cling”</b>, toast di layar, dan agen penerimanya terkejut sesaat (tanda “!!” berkilau di atas kepala). Monitor hanya menyala saat agennya sedang bekerja; selebihnya layarnya tidur (sleep) seperti monitor sungguhan.</p>
 
         <section class="sec">
           <h2>Gaya Karakter</h2>
@@ -640,11 +650,27 @@
       g.globalAlpha = 1;
       var t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
     }
+    /* Sleep face for every screen: near-black glass with one small amber
+       standby dot, like a real monitor in standby. Screens swap to this
+       whenever their owner is not actively working (see updateScreens). */
+    var SLEEP_TEX = (function(){
+      var c = document.createElement('canvas'); c.width = 256; c.height = 176;
+      var g = c.getContext('2d');
+      g.fillStyle = '#04060a'; g.fillRect(0,0,256,176);
+      g.fillStyle = 'rgba(255,255,255,0.045)'; g.fillRect(0,0,256,30); // faint glass sheen
+      var dg = g.createRadialGradient(226,158,0, 226,158,10);
+      dg.addColorStop(0, 'rgba(255,157,46,0.85)'); dg.addColorStop(1, 'rgba(255,157,46,0)');
+      g.fillStyle = dg; g.beginPath(); g.arc(226,158,10,0,6.29); g.fill();
+      g.fillStyle = '#ff9d2e'; g.beginPath(); g.arc(226,158,3.2,0,6.29); g.fill();
+      var t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
+    })();
     function screenMesh(w, h, hue){
       var tex = screenTexture(hue);
       var m = new THREE.Mesh(new THREE.PlaneGeometry(w, h),
         new THREE.MeshStandardMaterial({ map:tex, emissive:0xffffff, emissiveMap:tex, emissiveIntensity:0.55, roughness:0.4 }));
       m.material.userData.base = 0.55; screenMats.push(m.material);
+      m.material.userData.litTex = tex; // updateScreens swaps map/emissiveMap between this and SLEEP_TEX
+      m.material.userData.onAmt = 0;    // every screen boots asleep; it wakes when its owner starts work
       return m;
     }
     function makeChair(){
@@ -946,6 +972,7 @@
       return { cfg:cfg, group:grp, proc:proc, hips:hips, head:headG, armL:armL, armR:armR,
         legL:legL, legR:legR, ring:ring,
         celebrateT:0, pendingIdle:false, celebF:0,
+        startleT:0, bangT:0, startleEnv:0,
         cyc:{ phase:'type', t:3 + Math.random()*4, mouseAmt:0, clickT:0.8 + Math.random(),
               glanceT:2 + Math.random()*3, seed:Math.random()*20 }, glanceAmt:0, armAim:0,
         state:'idle', path:[], speed:2.2, yaw:0, targetYaw:0, sit:0, sitTarget:0, drop:0, dropTarget:0,
@@ -979,6 +1006,14 @@
       labelWrap.appendChild(el);
       a.tag = el; a.tagState = el.querySelector('.st'); a.tagBar = el.querySelector('.bar i');
       a.tagDot = el.querySelector('.dot');
+      // "!!" startle badge, shown for ~1 s when a task lands on this agent:
+      // a cartoon orange starburst with dark double exclamation marks, the
+      // classic manga/comic surprise flash from the user's reference image
+      var bang = document.createElement('div');
+      bang.className = 'bang'; bang.style.display = 'none';
+      bang.innerHTML = '<svg viewBox="0 0 100 100" aria-hidden="true"><polygon fill="#f6a821" stroke="#7a3c00" stroke-width="3" stroke-linejoin="round" points="97,50 78,57.5 90.7,73.5 70.5,70.5 73.5,90.7 57.5,78 50,97 42.5,78 26.5,90.7 29.5,70.5 9.3,73.5 22,57.5 3,50 22,42.5 9.3,26.5 29.5,29.5 26.5,9.3 42.5,22 50,3 57.5,22 73.5,9.3 70.5,29.5 90.7,26.5 78,42.5"/></svg><span>!!</span>';
+      labelWrap.appendChild(bang);
+      a.bang = bang;
     });
 
     /* ================= character styles: VRoid (default) / Kenney ================= */
@@ -1133,7 +1168,7 @@
         }
         return model.getObjectByName(nodeName) || null;
       }
-      var D = { root:root, vrm:vrm, rest:{}, joyMorphs:[], blinkMorphs:[], nextBlink:2 + Math.random()*2, blinkT:-1,
+      var D = { root:root, vrm:vrm, rest:{}, joyMorphs:[], blinkMorphs:[], surpriseMorphs:[], _surAll:[], _surParts:[], nextBlink:2 + Math.random()*2, blinkT:-1,
         bones:{
           hips: bone('Hips','J_Bip_C_Hips'), spine: bone('Spine','J_Bip_C_Spine'),
           chest: bone('Chest','J_Bip_C_Chest') || bone('UpperChest','J_Bip_C_UpperChest'),
@@ -1217,12 +1252,23 @@
             Object.keys(o.morphTargetDictionary).forEach(function(mn){
               var low = mn.toLowerCase();
               if (low.indexOf('joy') >= 0) D.joyMorphs.push({ mesh:o, idx:o.morphTargetDictionary[mn] });
+              // "surprised" preset morphs, if this sample exposes them (the
+              // face half of the cling startle) — collected, never required.
+              // Fcl_ALL_Surprised is the combined preset morph: when it
+              // exists it alone carries the expression, and the separate
+              // brow/eye/mouth parts are only a fallback — applying both
+              // would double the deformation.
+              if (low.indexOf('surpris') >= 0 || low.indexOf('odoroki') >= 0){
+                if (low.indexOf('_all_') >= 0) D._surAll.push({ mesh:o, idx:o.morphTargetDictionary[mn] });
+                else D._surParts.push({ mesh:o, idx:o.morphTargetDictionary[mn] });
+              }
               if ((low.indexOf('blink') >= 0 && low.indexOf('_l') < 0 && low.indexOf('_r') < 0) || low.indexOf('eye_close') >= 0)
                 D.blinkMorphs.push({ mesh:o, idx:o.morphTargetDictionary[mn] });
             });
           }
         });
       }
+      D.surpriseMorphs = D._surAll.length ? D._surAll : D._surParts;
       a.vrmData = D;
       refreshVisibility(a);
     }
@@ -1387,8 +1433,11 @@
       var lean = a.armAim;
       poseBone(D, B.spine, (-0.10 - 0.10*lean)*sitF + br*0.5, 0, 0);
       poseBone(D, B.chest, (-0.06 - 0.07*lean)*sitF + br, 0, 0);
-      poseBone(D, B.head, -0.10*sitF + Math.sin(t*0.8 + a.phase)*0.03 + (a.glanceAmt || 0) * lean * 0.26,
-        Math.sin(t*0.45 + a.phase*2)*0.16*(1 - sitF*0.5), 0);
+      // startle snap: while the cling reaction runs, the head jerks up and
+      // back with a tiny fast tremble, then settles into the normal pose
+      var stEnv = a.startleEnv || 0;
+      poseBone(D, B.head, -0.10*sitF + Math.sin(t*0.8 + a.phase)*0.03 + (a.glanceAmt || 0) * lean * 0.26 - stEnv*0.34,
+        Math.sin(t*0.45 + a.phase*2)*0.16*(1 - sitF*0.5) + (stEnv > 0 ? Math.sin(t*42 + a.phase)*0.07*stEnv : 0), stEnv*0.14);
       var armDown = 1.22 - cf * 2.35;
       var armFwd = 0.12 + 0.5*sitF;
       poseBone(D, B.upperArmL, armFwd + (walking ? sw*0.4 : 0) + (typing ? Math.sin(t*10 + a.phase)*0.05 : 0), 0, armDown);
@@ -1421,11 +1470,23 @@
           poseBone(D, f.b, 0, 0, (f.side === 'L' ? 1 : -1) * c);
         });
       }
+      // Surprised face for the cling startle, riding the same ~1 s window as
+      // the "!!" badge (bangT): swells in and back out, ending at neutral.
+      // Only applied when the model actually exposes a "surprised" preset —
+      // via the VRM blend-shape proxy when present, else via raw morphs
+      // whose names carry it; if neither exists the face simply stays as-is
+      // and the badge + hop still carry the reaction.
+      var surprAmt = a.bangT > 0 ? Math.sin(Math.min(1, 1 - a.bangT) * Math.PI) : 0;
       if (D.vrm && D.vrm.blendShapeProxy && window.THREE_VRM && THREE_VRM.VRMSchema){
         try { D.vrm.blendShapeProxy.setValue(THREE_VRM.VRMSchema.BlendShapePresetName.Joy, cf); } catch(e){}
+        if (D.surpriseOk !== false){
+          try { D.vrm.blendShapeProxy.setValue(THREE_VRM.VRMSchema.BlendShapePresetName.Surprised, surprAmt); }
+          catch(e){ D.surpriseOk = false; } // preset not exposed by this model — never force it again
+        }
         try { D.vrm.update(dt); } catch(e){}
       } else {
         D.joyMorphs.forEach(function(m){ m.mesh.morphTargetInfluences[m.idx] = cf; });
+        D.surpriseMorphs.forEach(function(m){ m.mesh.morphTargetInfluences[m.idx] = surprAmt; });
         var bl = 0;
         D.nextBlink -= dt;
         if (D.nextBlink <= 0){ D.blinkT = 0; D.nextBlink = 2.4 + Math.random()*2.4; }
@@ -1608,7 +1669,15 @@
       tasks.push(t); a.task = t;
       a.pendingIdle = false; a.celebrateT = 0;
       freeSpot(a);
-      if (!silent){ playCling(); toast('', 'Tugas baru masuk', title + ' → ' + a.cfg.name); }
+      if (!silent){
+        playCling(); toast('', 'Tugas baru masuk', title + ' → ' + a.cfg.name);
+        // Startle reaction on the exact event that plays the cling (manual
+        // form, random button, demo auto-assign, queue dispatch — all of
+        // them funnel through here non-silent): a quick hop + squash-and-
+        // stretch, a fast head snap on the VRoid rig, and a "!" bubble for
+        // ~1 s. Timers are consumed in animateAgent / updateVRM.
+        a.startleT = 0.55; a.bangT = 1.0;
+      }
       log('Tugas baru untuk ' + a.cfg.name + ': ' + title);
       sendTo(a, a.home.pos, [], a.home.yaw, function(){ startWork(a, t); });
       a.statusText = a.cfg.beanbag ? 'Menuju beanbag' : 'Menuju meja';
@@ -1850,7 +1919,7 @@
       renderer.toneMappingExposure = 0.8 + 0.32*df;
       if (scene.environmentIntensity !== undefined) scene.environmentIntensity = 0.25 + 0.75*df;
       lampGlowMats.forEach(function(m){ m.emissiveIntensity = m.userData.base + nt*1.7; });
-      screenMats.forEach(function(m){ m.userData.cur = m.userData.base + nt*0.65; m.emissiveIntensity = m.userData.cur; });
+      screenMats.forEach(function(m){ m.userData.cur = m.userData.base + nt*0.65; }); // brightness target only — updateScreens owns the actual emissiveIntensity (sleep/wake)
       if (Math.abs(df - cycle.lastDraw) > 0.015){ drawView(df); cycle.lastDraw = df; }
       var hour = cycle.p * 24;
       var hh = Math.floor(hour), mm = Math.floor((hour - hh)*60);
@@ -1886,6 +1955,32 @@
       setTimeout(function(){ if (demoOn) assignTask('Riset pergerakan harga BBCA minggu ini', 'fajar', true); }, 6000);
     })();
 
+    /* ================= screens: awake only while working =================
+       A desk monitor (and Fajar's laptop screen) is lit ONLY while its owner
+       is seated at their home spot actually working a task. The rest of the
+       time — relaxing at the desk, standing at a spot, walking, in a meeting
+       — it sleeps: code texture swapped for the dark standby face and the
+       emissive faded to zero, day and night alike. Waking/sleeping cross-
+       fades over ~0.3 s, and after a task completes the screen stays awake
+       for a ~2 s grace period before it sleeps again. */
+    function updateScreens(dt, t){
+      agents.forEach(function(a, i){
+        var scr = a.desk && a.desk.screen; if (!scr) return;
+        var m = scr.material, u = m.userData;
+        var working = a.state === 'work' && !!a.task && a.sit > 0.7 && !a.path.length;
+        if (working) u.hold = 2;
+        else if (u.hold > 0) u.hold -= dt;
+        var target = (working || u.hold > 0) ? 1 : 0;
+        u.onAmt += (target - u.onAmt) * Math.min(1, dt*6);
+        if (Math.abs(target - u.onAmt) < 0.01) u.onAmt = target;
+        var wantMap = u.onAmt > 0.5 ? u.litTex : SLEEP_TEX;
+        if (m.map !== wantMap){ m.map = wantMap; m.emissiveMap = wantMap; }
+        var base = u.cur !== undefined ? u.cur : u.base;
+        var flick = working ? Math.sin(t*7 + i)*0.1 : 0;
+        m.emissiveIntensity = Math.max(0, u.onAmt * (base + flick));
+      });
+    }
+
     /* ================= animation ================= */
     var clockT = new THREE.Clock();
     var projV = new THREE.Vector3();
@@ -1906,6 +2001,13 @@
           if (!meetingActive && !a.task) goIdle(a);
         }
       }
+      // Startle reaction timers (set in assignTask, on the cling event) run
+      // on wall-clock dt like the work cycle, so the ~0.5 s hop lasts the
+      // same real time even in a slow or throttled tab.
+      if (a.startleT > 0) a.startleT = Math.max(0, a.startleT - dtW);
+      if (a.bangT > 0) a.bangT = Math.max(0, a.bangT - dtW);
+      var stProg = a.startleT > 0 ? 1 - a.startleT/0.55 : 1;
+      a.startleEnv = a.startleT > 0 ? Math.sin(stProg * Math.PI) : 0;
       if (a.path.length){
         var target = a.path[0];
         var dx = target.x - p.x, dz = target.z - p.z;
@@ -1928,6 +2030,17 @@
       // Safety net: no agent may ever stand or walk outside the floor slab.
       p.x = Math.max(-FW/2 + 0.45, Math.min(FW/2 - 0.45, p.x));
       p.z = Math.max(-FD/2 + 0.45, Math.min(FD/2 - 0.45, p.z));
+      // Startle hop + squash-and-stretch on the whole figure group. Because
+      // both casts ride inside this group, the same hop serves as the Kenney
+      // equivalent, and for Fajar it reads as a small bounce on the beanbag,
+      // timed with his laptop scene opening as he heads back to the bag.
+      if (a.startleT > 0 && !REDUCED){
+        a.group.position.y = a.startleEnv * 0.085;
+        var sq = Math.sin(stProg * Math.PI * 2) * 0.055;
+        a.group.scale.set(1 - sq*0.6, 1 + sq, 1 - sq*0.6);
+      } else if (a.group.position.y !== 0){
+        a.group.position.y = 0; a.group.scale.set(1, 1, 1);
+      }
       a.yaw = easeYaw(dt*8, a.yaw, a.targetYaw);
       a.group.rotation.y = a.yaw;
       a.sit += (a.sitTarget - a.sit) * Math.min(1, dt*5);
@@ -2014,6 +2127,18 @@
         sy = Math.max(topPad, Math.min(stage.clientHeight - 8, sy - (a.tagLift || 0)));
         a.tag.style.transform = 'translate(' + sx.toFixed(1) + 'px,' + sy.toFixed(1) + 'px) translate(-50%,-115%)';
       }
+      // "!!" starburst badge floats a little above the name tag while bangT runs down
+      if (a.bang){
+        if (a.bangT > 0 && vis){
+          projV.set(p.x, (a.tagY || 1.8) + 0.52, p.z).project(camera);
+          var bx = (projV.x*0.5 + 0.5) * stage.clientWidth;
+          var by = (-projV.y*0.5 + 0.5) * stage.clientHeight;
+          var bp = 1 - a.bangT/1.0;
+          var bs = bp < 0.18 ? 0.35 + (bp/0.18)*0.65 : 1 + Math.sin(bp * Math.PI) * 0.07;
+          a.bang.style.display = 'block';
+          a.bang.style.transform = 'translate(' + bx.toFixed(1) + 'px,' + by.toFixed(1) + 'px) translate(-50%,-100%) scale(' + bs.toFixed(2) + ')';
+        } else if (a.bang.style.display !== 'none') a.bang.style.display = 'none';
+      }
       a.tagState.textContent = a.task ? a.task.title : a.statusText;
       a.tag.className = 'tag' + (a.state === 'work' ? ' working' : '');
       if (a.task) a.tagBar.style.width = a.task.progress.toFixed(0) + '%';
@@ -2068,11 +2193,8 @@
       controls.update();
       updateCycle(dt);
       updateBagLaptop(dt);
+      updateScreens(dt, t);
       agents.forEach(function(a, i){
-        if (a.state === 'work' && a.desk && a.desk.screen){
-          var m = a.desk.screen.material;
-          m.emissiveIntensity = (m.userData.cur || 0.55) + Math.sin(t*7 + i)*0.1;
-        }
         animateAgent(a, dt, t, dtW);
         updateKenney(a, dt, t);
         updateVRM(a, dt, t);
