@@ -674,6 +674,11 @@
       var scr = screenMesh(0.97, 0.55, hue); scr.position.set(0, 0.52, 0.03); mon.add(scr);
       grp.add(mon);
       var kb = rbox(0.62, 0.035, 0.22, 0xe8e4da, 0.5); kb.position.set(0.05, 0.82, 0.16); grp.add(kb);
+      // mouse on a pad at the keyboard's right — the work-cycle animation
+      // slides the worker's right hand over here between typing bouts
+      var mpad = rbox(0.27, 0.014, 0.33, 0x33404e, 0.85); mpad.position.set(0.58, 0.802, 0.17); grp.add(mpad);
+      var mouse = rbox(0.115, 0.05, 0.185, 0x2b3440, 0.35); mouse.position.set(0.58, 0.834, 0.17); grp.add(mouse);
+      var mWheel = box(0.02, 0.012, 0.05, 0x9fb2c4, 0.4); mWheel.position.set(0.58, 0.862, 0.115); grp.add(mWheel);
       var mug = cyl(0.05, 0.045, 0.11, 0xef6f6c, 14, 0.4); mug.position.set(0.85, 0.85, 0.12); grp.add(mug);
       var bookA = box(0.34, 0.04, 0.26, 0x2a9d8f, 0.7); bookA.position.set(-0.88, 0.82, -0.05); bookA.rotation.y = -0.2; grp.add(bookA);
       // desk lamp with warm glow head
@@ -693,6 +698,7 @@
     var beanbagDir = new THREE.Vector3(-0.72, 0, -0.5).normalize();
     var beanbagYaw = Math.atan2(beanbagDir.x, beanbagDir.z);
     var beanbagScreen = null;
+    var bagLap = null, bagLapHinge = null; // laptop group + its screen hinge (posed per-frame by updateBagLaptop)
     (function buildBeanbag(){
       var grp = new THREE.Group(); grp.position.copy(beanbagPos); grp.rotation.y = beanbagYaw; office.add(grp);
       // ONE beanbag, not two balls: a single lathe-turned pear/teardrop sack
@@ -827,9 +833,11 @@
       // there, so the base was buried in the bag and only the black screen
       // slab showed, tilted over toward the sitter.
       var lap = new THREE.Group(); lap.position.set(0, 0.775, 0.3); lap.rotation.x = 0.08; grp.add(lap);
+      bagLap = lap;
       var lbase = rbox(0.62, 0.03, 0.38, 0xb9c4cf, 0.35); lap.add(lbase);
       var lkeys = rbox(0.52, 0.012, 0.25, 0x2b3440, 0.5); lkeys.position.set(0, 0.02, -0.03); lap.add(lkeys);
       var lscr = new THREE.Group(); lscr.position.set(0, 0.015, 0.19); lscr.rotation.x = 0.22; lap.add(lscr);
+      bagLapHinge = lscr;
       var lbez = rbox(0.62, 0.42, 0.03, 0x1d2733, 0.35); lbez.position.y = 0.21; lscr.add(lbez);
       beanbagScreen = screenMesh(0.56, 0.36, '#5da85e'); beanbagScreen.position.set(0, 0.21, -0.02); beanbagScreen.rotation.y = Math.PI; lscr.add(beanbagScreen);
       // small side stool with a cup — pulled well clear of the bag (centre
@@ -838,6 +846,41 @@
       var stool = cyl(0.2, 0.17, 0.34, 0x8a5a34, 14, 0.6); stool.position.set(1.42, 0.17, 0.42); grp.add(stool);
       var cup2 = cyl(0.05, 0.042, 0.1, 0x4361aa, 12, 0.4); cup2.position.set(1.42, 0.39, 0.42); grp.add(cup2);
     })();
+
+    /* ---------- beanbag laptop: a little scene, not a fixed prop ----------
+       The laptop only exists OPEN on Fajar's lap while he is actually seated
+       on the bag. Whenever he is anywhere else (standing at a spot, walking,
+       in a meeting) it sits CLOSED on the seat hollow, base resting on the
+       cloth at the hollow's 0.60 floor, lid folded flat over the keyboard.
+       Transitions are driven by his sit amount: as he settles onto the bag
+       the laptop lifts off the hollow, lands on his lap and the lid swings
+       open; as he stands up the lid folds shut first and the closed laptop
+       settles back into the hollow before he walks away. It is never left
+       floating open in mid-air next to an empty beanbag. */
+    var LAP_POSE = { pos:new THREE.Vector3(0, 0.775, 0.3),     rx:0.08,  ry:0,    hinge:0.22 };
+    var BAG_POSE = { pos:new THREE.Vector3(0.03, 0.618, -0.03), rx:-0.03, ry:0.22, hinge:-1.52 };
+    var bagLapAmt = 1; // Fajar starts the day seated on the bag, laptop open
+    function updateBagLaptop(dt){
+      if (!bagLap || !bagLapHinge) return;
+      var f = null;
+      for (var i = 0; i < agents.length; i++) if (agents[i].cfg.beanbag){ f = agents[i]; break; }
+      if (!f) return;
+      var seated = f.sit > 0.5 && !f.path.length &&
+        Math.hypot(f.group.position.x - beanbagPos.x, f.group.position.z - beanbagPos.z) < 0.45;
+      var target = seated ? 1 : 0;
+      bagLapAmt += (target - bagLapAmt) * Math.min(1, dt * 2.4);
+      if (Math.abs(target - bagLapAmt) < 0.002) bagLapAmt = target;
+      var e = bagLapAmt * bagLapAmt * (3 - 2 * bagLapAmt);
+      bagLap.position.lerpVectors(BAG_POSE.pos, LAP_POSE.pos, e);
+      bagLap.position.y += Math.sin(e * Math.PI) * 0.05; // small lift arc while it changes hands
+      bagLap.rotation.x = BAG_POSE.rx + (LAP_POSE.rx - BAG_POSE.rx) * e;
+      bagLap.rotation.y = BAG_POSE.ry + (LAP_POSE.ry - BAG_POSE.ry) * e;
+      // hinge lags the carry: opening starts once the laptop is mostly on the
+      // lap; closing finishes while it is still slightly lifted off the bag
+      var h = Math.max(0, Math.min(1, (e - 0.30) / 0.70));
+      h = h * h * (3 - 2 * h);
+      bagLapHinge.rotation.x = BAG_POSE.hinge + (LAP_POSE.hinge - BAG_POSE.hinge) * h;
+    }
 
     /* ---------- meeting: stools around the coffee table ---------- */
     var meeting = { seats: [] };
@@ -953,6 +996,8 @@
       return { cfg:cfg, group:grp, proc:proc, hips:hips, head:headG, armL:armL, armR:armR,
         legL:legL, legR:legR, ring:ring,
         celebrateT:0, pendingIdle:false, celebF:0,
+        cyc:{ phase:'type', t:1.5 + Math.random()*2.5, mouseAmt:0, clickT:0.8 + Math.random(),
+              glanceT:2 + Math.random()*3, seed:Math.random()*20 }, glanceAmt:0, armAim:0,
         state:'idle', path:[], speed:2.2, yaw:0, targetYaw:0, sit:0, sitTarget:0, drop:0, dropTarget:0,
         phase:Math.random()*6.28, task:null, spot:null, idleSpot:null, statusText:'Santai',
         tag:null, tagBar:null, tagState:null, seatPos:null, homeDrop:0 };
@@ -1142,6 +1187,7 @@
           head: bone('Head','J_Bip_C_Head'),
           upperArmL: bone('LeftUpperArm','J_Bip_L_UpperArm'), lowerArmL: bone('LeftLowerArm','J_Bip_L_LowerArm'),
           upperArmR: bone('RightUpperArm','J_Bip_R_UpperArm'), lowerArmR: bone('RightLowerArm','J_Bip_R_LowerArm'),
+          handL: bone('LeftHand','J_Bip_L_Hand'), handR: bone('RightHand','J_Bip_R_Hand'),
           upperLegL: bone('LeftUpperLeg','J_Bip_L_UpperLeg'), lowerLegL: bone('LeftLowerLeg','J_Bip_L_LowerLeg'),
           upperLegR: bone('RightUpperLeg','J_Bip_R_UpperLeg'), lowerLegR: bone('RightLowerLeg','J_Bip_R_LowerLeg'),
           footL: bone('LeftFoot','J_Bip_L_Foot'), footR: bone('RightFoot','J_Bip_R_Foot')
@@ -1167,6 +1213,34 @@
           D.ankleH = _ft.y; // ankle height above the floor (origin) when standing
         }
       }
+      // Arm chain measured in agent-group space (the model root carries no
+      // rotation of its own, only the per-frame sit drop on Y): joint
+      // positions, segment lengths, rest directions and rest orientations.
+      // updateVRM's desk-work IK aims the hands at the keyboard / mouse from
+      // these, so the pose is solved from the model's real proportions
+      // instead of guessed Euler angles.
+      (function measureArms(){
+        if (!D.bones.upperArmL || !D.bones.lowerArmL || !D.bones.handL) return;
+        a.group.updateMatrixWorld(true);
+        var rootInv = new THREE.Matrix4().copy(root.matrixWorld).invert();
+        var rootQ = new THREE.Quaternion(); root.getWorldQuaternion(rootQ); rootQ.invert();
+        function jp(b){ var v = new THREE.Vector3(); b.getWorldPosition(v); return v.applyMatrix4(rootInv); }
+        function rq(b){ var q = new THREE.Quaternion(); b.getWorldQuaternion(q); return rootQ.clone().multiply(q); }
+        var sL = jp(D.bones.upperArmL), eL = jp(D.bones.lowerArmL), wL = jp(D.bones.handL);
+        D.jShoulderL = sL; D.jElbowL = eL; D.jWristL = wL;
+        D.upperArmLen = sL.distanceTo(eL);
+        D.foreArmLen = eL.distanceTo(wL);
+        D.restDirU_L = eL.clone().sub(sL).normalize();
+        D.restDirF_L = wL.clone().sub(eL).normalize();
+        D.restQU_L = rq(D.bones.upperArmL); D.restQF_L = rq(D.bones.lowerArmL);
+        if (D.bones.upperArmR && D.bones.lowerArmR && D.bones.handR){
+          var sR = jp(D.bones.upperArmR), eR = jp(D.bones.lowerArmR), wR = jp(D.bones.handR);
+          D.jShoulderR = sR; D.jElbowR = eR; D.jWristR = wR;
+          D.restDirU_R = eR.clone().sub(sR).normalize();
+          D.restDirF_R = wR.clone().sub(eR).normalize();
+          D.restQU_R = rq(D.bones.upperArmR); D.restQF_R = rq(D.bones.lowerArmR);
+        }
+      })();
       if (!vrm){
         model.traverse(function(o){
           if (o.isMesh && o.morphTargetDictionary && o.morphTargetInfluences){
@@ -1197,6 +1271,73 @@
       _qq.setFromEuler(_qe.set(x, y, z));
       b.quaternion.copy(r).multiply(_qq);
     }
+    /* ----- desk-work arm aiming (VRoid) -----
+       Two-bone IK in world space: the wrist is aimed at a target (keyboard
+       home row, or the mouse on its pad) and the elbow is placed by the bend
+       solve with a down/out/back hint, so a working agent's hands genuinely
+       rest on the desk instead of hanging beside the chair. Bone world
+       orientations are derived from the rest directions measured in
+       setupVRM, then blended with the regular Euler pose by a.armAim so
+       entering/leaving the pose never pops. */
+    function aimArmSide(a, D, side, wristG, amt){
+      var B = D.bones;
+      var up = side === 'L' ? B.upperArmL : B.upperArmR;
+      var lo = side === 'L' ? B.lowerArmL : B.lowerArmR;
+      var restDirU = side === 'L' ? D.restDirU_L : D.restDirU_R;
+      var restDirF = side === 'L' ? D.restDirF_L : D.restDirF_R;
+      var restQU = side === 'L' ? D.restQU_L : D.restQU_R;
+      var restQF = side === 'L' ? D.restQF_L : D.restQF_R;
+      if (!up || !lo || !restDirU || !restQU) return;
+      var eU = up.quaternion.clone(), eL = lo.quaternion.clone(); // Euler pose, for blending
+      var gq = new THREE.Quaternion(); a.group.getWorldQuaternion(gq);
+      up.updateWorldMatrix(true, false);
+      var S = new THREE.Vector3(); up.getWorldPosition(S);
+      var W = a.group.localToWorld(wristG.clone());
+      var L1 = D.upperArmLen || 0.42, L2 = D.foreArmLen || 0.38;
+      var toW = W.clone().sub(S);
+      var d = Math.min(toW.length(), (L1 + L2) * 0.985);
+      var m = toW.normalize();
+      var hint = new THREE.Vector3(side === 'L' ? 0.38 : -0.38, -1, -0.30).applyQuaternion(gq);
+      hint.sub(m.clone().multiplyScalar(hint.dot(m)));
+      if (hint.lengthSq() < 1e-6) hint.set(0, -1, 0); else hint.normalize();
+      var cosA = Math.max(-1, Math.min(1, (L1*L1 + d*d - L2*L2) / (2*L1*d)));
+      var eDir = m.clone().multiplyScalar(cosA).add(hint.multiplyScalar(Math.sin(Math.acos(cosA)))).normalize();
+      var E = S.clone().add(eDir.clone().multiplyScalar(L1));
+      var pq = new THREE.Quaternion(); up.parent.getWorldQuaternion(pq);
+      var qd = new THREE.Quaternion().setFromUnitVectors(restDirU.clone().applyQuaternion(gq), eDir);
+      var wq = qd.multiply(gq.clone().multiply(restQU));
+      up.quaternion.copy(pq.invert().multiply(wq));
+      lo.updateWorldMatrix(true, false);
+      var pq2 = new THREE.Quaternion(); lo.parent.getWorldQuaternion(pq2);
+      var dl = W.clone().sub(E).normalize();
+      var qd2 = new THREE.Quaternion().setFromUnitVectors(restDirF.clone().applyQuaternion(gq), dl);
+      var wq2 = qd2.multiply(gq.clone().multiply(restQF));
+      lo.quaternion.copy(pq2.invert().multiply(wq2));
+      if (amt < 1){ up.quaternion.slerp(eU, 1 - amt); lo.quaternion.slerp(eL, 1 - amt); }
+    }
+    function aimArms(a, D, t){
+      a.group.updateMatrixWorld(true);
+      var cyc = a.cyc, mA = cyc.mouseAmt;
+      // wrist targets in agent-group space: the desk keyboard sits 0.75–0.97
+      // ahead of the chair position, its centre at x -0.05; the mouse pad is
+      // at x -0.55 (the agent's right). Typing taps alternate left/right and
+      // fade as the right hand slides over to the mouse.
+      var tapL = Math.abs(Math.sin(t*12.5 + cyc.seed*7)) * 0.016 * (1 - mA);
+      var tapR = Math.abs(Math.sin(t*12.5 + cyc.seed*7 + Math.PI)) * 0.016 * (1 - mA);
+      var wL = new THREE.Vector3(0.065, 0.865 + tapL, 0.79);
+      var wR = new THREE.Vector3(-0.165, 0.865 + tapR, 0.79);
+      if (mA > 0.001){
+        var clickDip = (cyc.phase === 'mouse' && cyc.clickT < 0.12) ? Math.sin(cyc.clickT / 0.12 * Math.PI) * 0.02 : 0;
+        var mouseR = new THREE.Vector3(
+          -0.55 + Math.sin(t*1.7 + cyc.seed*3) * 0.028,
+          0.868 - clickDip,
+          0.845 + Math.cos(t*1.3 + cyc.seed*5) * 0.030);
+        wR.lerp(mouseR, mA);
+      }
+      aimArmSide(a, D, 'L', wL, a.armAim);
+      aimArmSide(a, D, 'R', wR, a.armAim);
+    }
+
     function updateVRM(a, dt, t){
       var D = a.vrmData; if (!D || !D.root.visible) return;
       var B = D.bones;
@@ -1206,6 +1347,9 @@
       var sitF = a.sit;
       var sw = walking ? Math.sin(a.phase) : 0;
       var onBag = a.drop > 0.12;
+      var typing = (a.state === 'work' && sitF > 0.7);
+      var deskWork = typing && !onBag;
+      a.armAim += ((deskWork ? 1 : 0) - a.armAim) * Math.min(1, dt*4);
       // Beanbag vs chair seat (also drives sitDrop below). The beanbag cushion
       // top is 0.60, but the hip JOINT rides ~0.12 above it — the pelvis rests
       // ON the cushion, not in it. Putting the joint at 0.60 with the old
@@ -1215,21 +1359,49 @@
       // ride above the cushion's front slope, and the shin solve below drops
       // the feet to the floor past the bag's shortened front edge (0.62).
       var seatY = onBag ? 0.72 : 0.48;
-      var thighSit = onBag ? 1.45 : 1.5;
-      var kneeY = seatY - (D.thighLen || 0.51) * Math.cos(thighSit);
-      var shinPhi = Math.acos(Math.max(-1, Math.min(1, (kneeY - (D.ankleH || 0.2)) / (D.shinLen || 0.57))));
-      var lowerSit = shinPhi - thighSit;
-      var lowerBase = -1.45*sitF + sitF*sitF*(lowerSit + 1.45);
+      var thighX, lowerX, shinAbs;
+      if (onBag){
+        var thighSitB = 1.45;
+        var kneeYB = seatY - (D.thighLen || 0.51) * Math.cos(thighSitB);
+        var shinPhiB = Math.acos(Math.max(-1, Math.min(1, (kneeYB - (D.ankleH || 0.2)) / (D.shinLen || 0.57))));
+        thighX = thighSitB; lowerX = shinPhiB - thighSitB; shinAbs = shinPhiB;
+      } else {
+        // Desk / stool sit solved as two-bone IK to a planted foot: the ankle
+        // target sits ahead of the hip at standing ankle height, so the thigh
+        // runs forward from the hip, the shin drops from the knee to the
+        // floor and the sole lands flat (foot counter-pitch below). The old
+        // fixed angles left the whole leg jutting straight out under the
+        // desk with the soles facing the room.
+        var tl = D.thighLen || 0.51, sl = D.shinLen || 0.57, ah = D.ankleH || 0.15;
+        var axT = 0.60, ayT = ah - seatY;
+        var dRaw = Math.hypot(axT, ayT), dMax = (tl + sl) * 0.995;
+        if (dRaw > dMax){ axT *= dMax / dRaw; ayT *= dMax / dRaw; dRaw = dMax; }
+        var phiA = Math.atan2(axT, -ayT);
+        var cosB = Math.max(-1, Math.min(1, (tl*tl + dRaw*dRaw - sl*sl) / (2 * tl * dRaw)));
+        thighX = phiA + Math.acos(cosB);
+        var kx = tl * Math.sin(thighX), ky = -tl * Math.cos(thighX);
+        shinAbs = Math.atan2(axT - kx, -(ayT - ky));
+        lowerX = shinAbs - thighX;
+      }
+      var lowerBase = -1.45*sitF + sitF*sitF*(lowerX + 1.45);
       // bone-local signs follow the samples' own axes: forward is -Z, left arm points -X
-      poseBone(D, B.upperLegL, thighSit*sitF + sw*0.55, 0, 0);
-      poseBone(D, B.upperLegR, thighSit*sitF - sw*0.55, 0, 0);
+      poseBone(D, B.upperLegL, thighX*sitF + sw*0.55, 0, 0);
+      poseBone(D, B.upperLegR, thighX*sitF - sw*0.55, 0, 0);
       poseBone(D, B.lowerLegL, lowerBase - (walking ? Math.max(0, sw)*0.7 : 0), 0, 0);
       poseBone(D, B.lowerLegR, lowerBase - (walking ? Math.max(0, -sw)*0.7 : 0), 0, 0);
+      if (!onBag){ // soles flat on the floor: cancel the shin's pitch at the ankle
+        var footX = -(thighX*sitF + lowerBase);
+        poseBone(D, B.footL, footX, 0, 0);
+        poseBone(D, B.footR, footX, 0, 0);
+      }
       var br = Math.sin(t*1.7 + a.phase) * 0.02;
-      poseBone(D, B.spine, -0.10*sitF + br*0.5, 0, 0);
-      poseBone(D, B.chest, -0.06*sitF + br, 0, 0);
-      poseBone(D, B.head, -0.10*sitF + Math.sin(t*0.8 + a.phase)*0.03, Math.sin(t*0.45 + a.phase*2)*0.16*(1 - sitF*0.5), 0);
-      var typing = (a.state === 'work' && sitF > 0.7);
+      // desk workers lean in toward the screen a little; every so often the
+      // head dips to glance at the keyboard, then returns to the monitor
+      var lean = a.armAim;
+      poseBone(D, B.spine, (-0.10 - 0.10*lean)*sitF + br*0.5, 0, 0);
+      poseBone(D, B.chest, (-0.06 - 0.07*lean)*sitF + br, 0, 0);
+      poseBone(D, B.head, -0.10*sitF + Math.sin(t*0.8 + a.phase)*0.03 + (a.glanceAmt || 0) * lean * 0.26,
+        Math.sin(t*0.45 + a.phase*2)*0.16*(1 - sitF*0.5), 0);
       var armDown = 1.22 - cf * 2.35;
       var armFwd = 0.12 + 0.5*sitF;
       poseBone(D, B.upperArmL, armFwd + (walking ? sw*0.4 : 0) + (typing ? Math.sin(t*10 + a.phase)*0.05 : 0), 0, armDown);
@@ -1239,6 +1411,7 @@
       var hop = (cf > 0.03 && !walking) ? Math.abs(Math.sin(t*9)) * 0.07 * cf : 0;
       var sitDrop = Math.max(0, (D.hipsY || 0.76) - seatY) * sitF;
       D.root.position.y = -sitDrop + (walking ? Math.abs(Math.sin(a.phase))*0.03 : 0) + hop;
+      if (a.armAim > 0.01 && D.jShoulderL) aimArms(a, D, t);
       if (D.vrm && D.vrm.blendShapeProxy && window.THREE_VRM && THREE_VRM.VRMSchema){
         try { D.vrm.blendShapeProxy.setValue(THREE_VRM.VRMSchema.BlendShapePresetName.Joy, cf); } catch(e){}
         try { D.vrm.update(dt); } catch(e){}
@@ -1748,13 +1921,35 @@
       if (a.celebrateT > 0 && !moving) a.hips.position.y += Math.abs(Math.sin(t*9))*0.055;
       a.hips.rotation.x = moving ? 0.06 : 0;
       var typing = (a.state === 'work' && sit > 0.7);
+      // Work cycle for desk workers, like a person at a real PC: a bout of
+      // two-handed typing, then the right hand slides over to the mouse for
+      // a while (small glides, the odd click press), then back to the keys.
+      // Phase lengths are randomised per agent and per bout so the team
+      // never moves in robot unison; mouseAmt smooths every transition.
+      var cyc = a.cyc;
+      var deskWorkPose = typing && !a.cfg.beanbag;
+      if (deskWorkPose){
+        cyc.t -= dt;
+        if (cyc.t <= 0){
+          cyc.phase = cyc.phase === 'type' ? 'mouse' : 'type';
+          cyc.t = cyc.phase === 'type' ? 2.2 + Math.random()*3.2 : 1.6 + Math.random()*2.4;
+        }
+        cyc.clickT -= dt; if (cyc.clickT <= 0) cyc.clickT = 0.7 + Math.random()*1.1;
+        cyc.glanceT -= dt; if (cyc.glanceT <= -1.1) cyc.glanceT = 3.2 + Math.random()*3.6;
+      }
+      cyc.mouseAmt += (((deskWorkPose && cyc.phase === 'mouse') ? 1 : 0) - cyc.mouseAmt) * Math.min(1, dt*3.2);
+      a.glanceAmt = (deskWorkPose && cyc.glanceT < 0) ? Math.sin(Math.min(1, -cyc.glanceT/1.1) * Math.PI) : 0;
+      var clickPulse = (deskWorkPose && cyc.phase === 'mouse' && cyc.clickT < 0.12)
+        ? Math.sin(cyc.clickT/0.12 * Math.PI) : 0;
       if (moving){
         a.armL.rotation.x = -walkSwing*0.55; a.armR.rotation.x = walkSwing*0.55;
         a.armL.rotation.z = 0.12; a.armR.rotation.z = -0.12;
       } else if (typing){
+        var mA = cyc.mouseAmt;
         a.armL.rotation.x = -1.05 + Math.sin(t*11 + a.phase)*0.08;
-        a.armR.rotation.x = -1.05 + Math.cos(t*12.3 + a.phase)*0.08;
-        a.armL.rotation.z = 0.24; a.armR.rotation.z = -0.24;
+        a.armR.rotation.x = (-1.05 + Math.cos(t*12.3 + a.phase)*0.08) * (1 - mA) + (-0.92 + clickPulse*0.07) * mA;
+        a.armL.rotation.z = 0.24;
+        a.armR.rotation.z = -0.24 * (1 - mA) + -0.55 * mA;
       } else if (a.state === 'meeting' && sit > 0.7){
         a.armL.rotation.x = -0.85; a.armR.rotation.x = -0.85;
         a.armL.rotation.z = 0.3; a.armR.rotation.z = -0.3;
@@ -1767,7 +1962,7 @@
         a.armL.rotation.z = 0.1; a.armR.rotation.z = -0.1;
       }
       a.head.rotation.y = moving ? 0 : Math.sin(t*0.45 + a.phase*2)*0.22*(1-sit*0.4);
-      a.head.rotation.x = typing ? 0.14 + Math.sin(t*2.2)*0.03 : Math.sin(t*0.8 + a.phase)*0.04;
+      a.head.rotation.x = typing ? 0.14 + Math.sin(t*2.2)*0.03 + a.glanceAmt*0.17 : Math.sin(t*0.8 + a.phase)*0.04;
       if (focusRingAgent === a) a.ring.material.opacity = 0.55 + Math.sin(t*4)*0.25;
       projV.set(p.x, a.tagY || 1.8, p.z).project(camera);
       var vis = projV.z < 1;
@@ -1825,6 +2020,7 @@
       }
       controls.update();
       updateCycle(dt);
+      updateBagLaptop(dt);
       agents.forEach(function(a, i){
         if (a.state === 'work' && a.desk && a.desk.screen){
           var m = a.desk.screen.material;
