@@ -871,6 +871,14 @@
       fajar:'assets/characters/AvatarSample_B.vrm'
     };
     var CHAR_H = 1.52;
+    // VRoid samples are slim real-proportioned figures: at the same measured 1.52
+    // height as the Kenney cast they read as tiny dolls next to the furniture
+    // (body width ~0.28x height, vs the chibi Kenney cast at ~1x). Scale them up
+    // 1.5x so their presence matches: standing height 2.28 — head well above the
+    // 0.75 desk top and the 1.65 monitor top, proportional to the mustard chairs
+    // and the beanbag. Seated leg angles are re-solved from the measured bone
+    // lengths in updateVRM, so the bigger scale does not push feet through the floor.
+    var VRM_H = CHAR_H * 1.5;
     var charStyle = 'kenney';
 
     function refreshVisibility(a){
@@ -879,6 +887,7 @@
       if (a.kenney) a.kenney.root.visible = showK;
       if (a.vrmData) a.vrmData.root.visible = showV;
       a.proc.visible = !showK && !showV;
+      a.tagY = showV ? 2.45 : 1.8; // name-tag anchor follows the taller VRoid cast
     }
     function applyStyle(style){
       charStyle = style;
@@ -975,7 +984,7 @@
       var model = gltf.scene;
       root.add(model);
       model.rotation.y = Math.PI; // the samples face -Z in file space; this page's rig faces +Z
-      normalizeHeight(model, CHAR_H);
+      normalizeHeight(model, VRM_H);
       model.traverse(function(o){ if (o.isMesh){ o.castShadow = true; o.frustumCulled = false; } });
       if (a.cfg.id === 'bima' || a.cfg.id === 'fajar'){ // reused sample model: slight colour variation
         var seen = [];
@@ -1005,7 +1014,8 @@
           upperArmL: bone('LeftUpperArm','J_Bip_L_UpperArm'), lowerArmL: bone('LeftLowerArm','J_Bip_L_LowerArm'),
           upperArmR: bone('RightUpperArm','J_Bip_R_UpperArm'), lowerArmR: bone('RightLowerArm','J_Bip_R_LowerArm'),
           upperLegL: bone('LeftUpperLeg','J_Bip_L_UpperLeg'), lowerLegL: bone('LeftLowerLeg','J_Bip_L_LowerLeg'),
-          upperLegR: bone('RightUpperLeg','J_Bip_R_UpperLeg'), lowerLegR: bone('RightLowerLeg','J_Bip_R_LowerLeg')
+          upperLegR: bone('RightUpperLeg','J_Bip_R_UpperLeg'), lowerLegR: bone('RightLowerLeg','J_Bip_R_LowerLeg'),
+          footL: bone('LeftFoot','J_Bip_L_Foot'), footR: bone('RightFoot','J_Bip_R_Foot')
         } };
       Object.keys(D.bones).forEach(function(key){
         var b = D.bones[key]; if (b) D.rest[b.uuid] = b.quaternion.clone();
@@ -1015,6 +1025,18 @@
         var hipWp = new THREE.Vector3();
         D.bones.hips.getWorldPosition(hipWp);
         D.hipsY = hipWp.y; // standing hip height after normalization — drives the sit drop
+        // Leg segment lengths at the final scale, measured from the bones
+        // themselves (they differ slightly per sample) — updateVRM solves the
+        // seated shin angle from these so the soles land exactly on the floor.
+        if (D.bones.upperLegL && D.bones.lowerLegL && D.bones.footL){
+          var _ul = new THREE.Vector3(), _ll = new THREE.Vector3(), _ft = new THREE.Vector3();
+          D.bones.upperLegL.getWorldPosition(_ul);
+          D.bones.lowerLegL.getWorldPosition(_ll);
+          D.bones.footL.getWorldPosition(_ft);
+          D.thighLen = _ul.y - _ll.y;
+          D.shinLen = _ll.y - _ft.y;
+          D.ankleH = _ft.y; // ankle height above the floor (origin) when standing
+        }
       }
       if (!vrm){
         model.traverse(function(o){
@@ -1054,11 +1076,22 @@
       var walking = a.path.length > 0;
       var sitF = a.sit;
       var sw = walking ? Math.sin(a.phase) : 0;
+      var seatY = a.drop > 0.12 ? 0.60 : 0.48; // beanbag top vs chair seat (also drives sitDrop below)
+      // Seated leg solve for the enlarged scale: the thigh sits lower-forward on
+      // the beanbag than on a chair, and the shin tilts forward by exactly the
+      // angle that returns the ankle to its standing height — computed from the
+      // measured bone lengths, so soles rest on the floor instead of sinking
+      // through it (a vertical shin at this scale would bury them ~0.25).
+      var thighSit = a.drop > 0.12 ? 1.12 : 1.5;
+      var kneeY = seatY - (D.thighLen || 0.51) * Math.cos(thighSit);
+      var shinPhi = Math.acos(Math.max(-1, Math.min(1, (kneeY - (D.ankleH || 0.2)) / (D.shinLen || 0.57))));
+      var lowerSit = shinPhi - thighSit;
+      var lowerBase = -1.45*sitF + sitF*sitF*(lowerSit + 1.45);
       // bone-local signs follow the samples' own axes: forward is -Z, left arm points -X
-      poseBone(D, B.upperLegL, 1.5*sitF + sw*0.55, 0, 0);
-      poseBone(D, B.upperLegR, 1.5*sitF - sw*0.55, 0, 0);
-      poseBone(D, B.lowerLegL, -1.45*sitF - (walking ? Math.max(0, sw)*0.7 : 0), 0, 0);
-      poseBone(D, B.lowerLegR, -1.45*sitF - (walking ? Math.max(0, -sw)*0.7 : 0), 0, 0);
+      poseBone(D, B.upperLegL, thighSit*sitF + sw*0.55, 0, 0);
+      poseBone(D, B.upperLegR, thighSit*sitF - sw*0.55, 0, 0);
+      poseBone(D, B.lowerLegL, lowerBase - (walking ? Math.max(0, sw)*0.7 : 0), 0, 0);
+      poseBone(D, B.lowerLegR, lowerBase - (walking ? Math.max(0, -sw)*0.7 : 0), 0, 0);
       var br = Math.sin(t*1.7 + a.phase) * 0.02;
       poseBone(D, B.spine, -0.10*sitF + br*0.5, 0, 0);
       poseBone(D, B.chest, -0.06*sitF + br, 0, 0);
@@ -1071,7 +1104,6 @@
       poseBone(D, B.lowerArmL, 0.25 + 0.55*sitF + (typing ? Math.sin(t*12.3 + a.phase)*0.07 : 0), 0, 0.08 + cf*0.6);
       poseBone(D, B.lowerArmR, 0.25 + 0.55*sitF + (typing ? Math.cos(t*10.7 + a.phase)*0.07 : 0), 0, -0.08 - cf*0.6);
       var hop = (cf > 0.03 && !walking) ? Math.abs(Math.sin(t*9)) * 0.07 * cf : 0;
-      var seatY = a.drop > 0.12 ? 0.60 : 0.48; // beanbag top vs chair seat
       var sitDrop = Math.max(0, (D.hipsY || 0.76) - seatY) * sitF;
       D.root.position.y = -sitDrop + (walking ? Math.abs(Math.sin(a.phase))*0.03 : 0) + hop;
       if (D.vrm && D.vrm.blendShapeProxy && window.THREE_VRM && THREE_VRM.VRMSchema){
@@ -1597,7 +1629,7 @@
       a.head.rotation.y = moving ? 0 : Math.sin(t*0.45 + a.phase*2)*0.22*(1-sit*0.4);
       a.head.rotation.x = typing ? 0.14 + Math.sin(t*2.2)*0.03 : Math.sin(t*0.8 + a.phase)*0.04;
       if (focusRingAgent === a) a.ring.material.opacity = 0.55 + Math.sin(t*4)*0.25;
-      projV.set(p.x, 1.8, p.z).project(camera);
+      projV.set(p.x, a.tagY || 1.8, p.z).project(camera);
       var vis = projV.z < 1;
       a.tag.style.display = vis ? 'block' : 'none';
       if (vis){
