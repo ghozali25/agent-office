@@ -44,10 +44,6 @@
         font-size:11px; font-weight:600; line-height:1.25; white-space:nowrap;
         box-shadow:0 4px 14px rgba(0,0,0,.25); text-align:center; will-change:transform;
       }
-      .tag .st{ display:block; font-size:9.5px; font-weight:500; opacity:.78; }
-      .tag .bar{ display:none; height:4px; border-radius:2px; background:rgba(255,255,255,.25); margin-top:4px; overflow:hidden; }
-      .tag .bar i{ display:block; height:100%; width:0%; background:#57e6b8; border-radius:2px; }
-      .tag.working .bar{ display:block; }
       .tag .dot{ display:inline-block; width:7px; height:7px; border-radius:50%; margin-right:5px; vertical-align:1px; }
       .bang{
         position:absolute; left:0; top:0; width:52px; height:52px;
@@ -85,24 +81,6 @@
         padding:9px 14px; border-radius:999px; backdrop-filter:blur(8px); white-space:nowrap;
         box-shadow:0 6px 18px rgba(10,20,30,.3);
       }
-      #toasts{ position:absolute; top:60px; left:50%; transform:translateX(-50%); z-index:6;
-        display:flex; flex-direction:column; gap:8px; align-items:center; pointer-events:none; width:min(92%,430px); }
-      .toast{
-        display:flex; gap:10px; align-items:flex-start; width:100%;
-        background:rgba(13,22,33,.9); color:#fff; border-radius:14px; padding:11px 14px;
-        box-shadow:0 12px 30px rgba(8,16,26,.35); backdrop-filter:blur(8px);
-        animation:toastIn .35s cubic-bezier(.2,.9,.3,1.2);
-      }
-      .toast.out{ opacity:0; transform:translateY(-6px); transition:all .3s; }
-      .toast .bell{ flex:none; width:30px; height:30px; border-radius:9px; background:#f5b942;
-        display:flex; align-items:center; justify-content:center; }
-      .toast .bell svg{ width:17px; height:17px; }
-      .toast b{ display:block; font-size:13.5px; }
-      .toast span{ font-size:12.5px; opacity:.85; }
-      .toast.done .bell{ background:#3ecf8e; }
-      .toast.meet .bell{ background:#7cc4ff; }
-      @keyframes toastIn{ from{ opacity:0; transform:translateY(-10px) scale(.96);} to{ opacity:1; transform:none;} }
-
       #errbox{ position:absolute; left:10px; bottom:10px; z-index:9; max-width:min(92%,520px);
         background:#7f1d1d; color:#fff; font-size:12.5px; padding:10px 13px; border-radius:10px; display:none; }
 
@@ -165,11 +143,7 @@
         #app{ flex-direction:column; }
         #stage{ flex:0 0 58dvh; }
         #panel{ flex:1 1 auto; width:auto; border-left:none; border-top:1px solid var(--line); }
-        #toasts{ top:56px; }
         .cams .tbtn{ padding:0 8px; }
-      }
-      @media (prefers-reduced-motion: reduce){
-        .toast{ animation:none; }
       }
     </style>
   </head>
@@ -202,7 +176,6 @@
             <button class="tbtn" type="button" data-cam="lounge">Beanbag</button>
           </div>
         </div>
-        <div id="toasts" aria-live="polite"></div>
         <div id="bootmsg" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;z-index:4;font-weight:700;font-size:15px;color:#dfe7ee;background:radial-gradient(120% 90% at 50% 38%, #1d1e23, #07080a)">Memuat kantor 3D…</div>
         <div id="soundHint">Ketuk layar sekali untuk mengaktifkan suara “cling”</div>
         <div id="errbox" role="alert"></div>
@@ -210,7 +183,7 @@
 
       <aside id="panel">
         <h1>Kantor Virtual 3D</h1>
-        <p class="sub">Diorama kantor chibi dalam satu ruangan hangat: lima agen AI bekerja di meja berkursi mustard dan beanbag besar. Jendela beralih dari siang berbukit hijau ke malam berlampu gedung — kantor ini bekerja 24/7. Setiap tugas yang kamu kirim disambut bunyi <b>“cling”</b>, toast di layar, dan agen penerimanya terkejut sesaat (tanda “!!” berkilau di atas kepala). Monitor hanya menyala saat agennya sedang bekerja; selebihnya layarnya tidur (sleep) seperti monitor sungguhan.</p>
+        <p class="sub">Diorama kantor chibi dalam satu ruangan hangat: lima agen AI bekerja di meja berkursi mustard dan beanbag besar. Jendela beralih dari siang berbukit hijau ke malam berlampu gedung — kantor ini bekerja 24/7. Setiap tugas yang kamu kirim disambut bunyi <b>“cling”</b>, dan agen penerimanya terkejut sesaat (tanda “!!” berkilau di samping kepala). Monitor hanya menyala saat agennya sedang bekerja; selebihnya layarnya tidur (sleep) seperti monitor sungguhan.</p>
 
         <section class="sec">
           <h2>Gaya Karakter</h2>
@@ -612,17 +585,6 @@
       var ccup = cyl(0.05, 0.042, 0.1, 0xf2b134, 12, 0.4); ccup.position.set(0.42, 0.53, -0.12); ct.add(ccup);
       var csaucer = cyl(0.08, 0.08, 0.015, 0xffffff, 14, 0.4); csaucer.position.set(0.42, 0.49, -0.12); ct.add(csaucer);
 
-      /* pendant lamp over the coffee table */
-      var cord = cyl(0.02, 0.02, 1.25, 0x444444, 6); cord.position.set(0, 3.8, 0.8); office.add(cord);
-      var pShadeMat = glowMat(0xf5c86b, 0.25);
-      var pShade = new THREE.Mesh(new THREE.ConeGeometry(0.46, 0.42, 24, 1, true),
-        new THREE.MeshStandardMaterial({ color:0xf5c86b, roughness:0.55, side:THREE.DoubleSide, emissive:0xf5c86b, emissiveIntensity:0.25 }));
-      pShade.position.set(0, 3.12, 0.8); pShade.castShadow = true; office.add(pShade);
-      lampGlowMats.push(pShade.material); pShade.material.userData.base = 0.25;
-      var pBulbMat = glowMat(0xffe2a8, 0.5);
-      var pBulb = new THREE.Mesh(new THREE.SphereGeometry(0.11, 16, 12), pBulbMat);
-      pBulb.position.set(0, 2.98, 0.8); office.add(pBulb);
-
       /* potted plants: front-left corner, right open edge (behind the beanbag from the camera), beside shelf */
       plant(-5.55, 4.2, 1.25); plant(6.0, 0.4, 0.95); plant(3.85, -4.3, 0.85);
 
@@ -722,6 +684,12 @@
     var beanbagPos = new THREE.Vector3(4.3, 0, 2.9);
     var beanbagDir = new THREE.Vector3(-0.72, 0, -0.5).normalize();
     var beanbagYaw = Math.atan2(beanbagDir.x, beanbagDir.z);
+    // Standing point just clear of the bag's front slope (floor reach
+    // ~0.62 + body clearance). Walks to and from the bag start and end
+    // HERE; the last stretch onto/off the cushion is a sit-driven slide
+    // (bagSeating / bagLeaving in animateAgent), so the bag agent never
+    // stands or walks on top of the bag itself.
+    var bagFrontPos = beanbagPos.clone().addScaledVector(beanbagDir, 1.08);
     var beanbagScreen = null;
     var bagLap = null, bagLapHinge = null; // laptop group + its screen hinge (posed per-frame by updateBagLaptop)
     (function buildBeanbag(){
@@ -977,7 +945,7 @@
               glanceT:2 + Math.random()*3, seed:Math.random()*20 }, glanceAmt:0, armAim:0,
         state:'idle', path:[], speed:2.2, yaw:0, targetYaw:0, sit:0, sitTarget:0, drop:0, dropTarget:0,
         phase:Math.random()*6.28, task:null, spot:null, idleSpot:null, statusText:'Santai',
-        tag:null, tagBar:null, tagState:null, seatPos:null, homeDrop:0 };
+        tag:null, seatPos:null, homeDrop:0, bagLeaving:false, bagSeating:false, bagFrom:null };
     }
 
     var agents = [];
@@ -1001,10 +969,12 @@
       a.tagLift = (ai % 2) * 22; // stagger neighbouring tags so they never stack
       var el = document.createElement('div');
       el.className = 'tag';
-      el.innerHTML = '<span class="dot" style="background:#8be0a4"></span>' + a.cfg.name +
-        '<span class="st"></span><span class="bar"><i></i></span>';
+      // Floating label = the agent's NAME only (plus the small status
+      // dot). Status / task text lives in the side panel's team list,
+      // never above the character.
+      el.innerHTML = '<span class="dot" style="background:#8be0a4"></span>' + a.cfg.name;
       labelWrap.appendChild(el);
-      a.tag = el; a.tagState = el.querySelector('.st'); a.tagBar = el.querySelector('.bar i');
+      a.tag = el;
       a.tagDot = el.querySelector('.dot');
       // "!!" startle badge, shown for ~1 s when a task lands on this agent:
       // a cartoon orange starburst with dark double exclamation marks, the
@@ -1049,6 +1019,12 @@
       if (a.kenney) a.kenney.root.visible = showK;
       if (a.vrmData) a.vrmData.root.visible = showV;
       a.tagY = showV ? 2.45 : 1.8; // name-tag anchor follows the taller VRoid cast
+      // Startle-badge anchor: head CENTRE height (standing), how far the
+      // head sinks when seated, and the sideways offset that parks the
+      // badge right beside the head instead of above it.
+      a.headY0 = showV ? 2.04 : 1.26;
+      a.headDrop = showV ? 0.52 : 0.34;
+      a.headSide = showV ? 0.37 : 0.47;
     }
     function applyStyle(style){
       charStyle = style;
@@ -1107,7 +1083,7 @@
     }
     function desiredKenneyClip(a){
       if (a.celebrateT > 0 && !a.path.length) return 'emote-yes';
-      if (a.path.length) return 'walk';
+      if (a._moving) return 'walk'; // actually striding — during the beanbag step-off slide a path exists but he is not walking yet
       if (a.sit > 0.65) return 'sit';
       return 'idle';
     }
@@ -1129,7 +1105,11 @@
       // are 0.48 (the VRoid rig targets its hip joint ~0.12 higher instead).
       // The sit clip alone drops the pelvis to ~0.06 above the floor, which
       // buried the body inside the beanbag and inside the desk chairs.
-      var seatY = a.drop > 0.12 ? 0.60 : 0.48;
+      // Blended continuously with the drop amount — a binary switch here
+      // popped the pelvis 0.12 in a single frame mid-sit, same sink bug
+      // as the VRoid rig had.
+      var bagK = Math.max(0, Math.min(1, (a.drop - 0.08) / 0.09));
+      var seatY = 0.48 + 0.12 * bagK;
       k.root.position.y = (seatY - (k.sitPelvis || 0.06)) * a.sit + (typing ? Math.sin(t*9 + a.phase) * 0.012 : 0);
       k.root.rotation.x = typing ? Math.sin(t*9 + a.phase) * 0.02 : 0;
     }
@@ -1376,7 +1356,7 @@
       var B = D.bones;
       a.celebF += (((a.celebrateT > 0) ? 1 : 0) - a.celebF) * Math.min(1, dt*7);
       var cf = a.celebF;
-      var walking = a.path.length > 0;
+      var walking = !!a._moving; // actually striding (set by animateAgent) — not merely "has a path": during the beanbag step-off slide a path exists but the legs must not swing
       var sitF = a.sit;
       var sw = walking ? Math.sin(a.phase) : 0;
       var onBag = a.drop > 0.12;
@@ -1388,45 +1368,54 @@
       // ON the cushion, not in it. Putting the joint at 0.60 with the old
       // 1.12 thigh angle dropped the knees to 0.38 in front of a cushion whose
       // surface there was ~0.70: the whole thigh vanished inside the bag.
-      // On the bag the thigh now stays near-horizontal (1.45), so the knees
-      // ride above the cushion's front slope, and the shin solve below drops
+      // On the bag the thigh stays near-horizontal (1.45), so the knees
+      // ride above the cushion's front slope, and the shin solve drops
       // the feet to the floor past the bag's shortened front edge (0.62).
-      var seatY = onBag ? 0.72 : 0.48;
-      var thighX, lowerX, shinAbs;
-      if (onBag){
-        var thighSitB = 1.45;
-        var kneeYB = seatY - (D.thighLen || 0.51) * Math.cos(thighSitB);
-        var shinPhiB = Math.acos(Math.max(-1, Math.min(1, (kneeYB - (D.ankleH || 0.2)) / (D.shinLen || 0.57))));
-        thighX = thighSitB; lowerX = shinPhiB - thighSitB; shinAbs = shinPhiB;
-      } else {
-        // Desk / stool sit solved as two-bone IK to a planted foot: the ankle
-        // target sits ahead of the hip at standing ankle height, so the thigh
-        // runs forward from the hip, the shin drops from the knee to the
-        // floor and the sole lands flat (foot counter-pitch below). The old
-        // fixed angles left the whole leg jutting straight out under the
-        // desk with the soles facing the room.
-        var tl = D.thighLen || 0.51, sl = D.shinLen || 0.57, ah = D.ankleH || 0.15;
-        var axT = 0.60, ayT = ah - seatY;
-        var dRaw = Math.hypot(axT, ayT), dMax = (tl + sl) * 0.995;
-        if (dRaw > dMax){ axT *= dMax / dRaw; ayT *= dMax / dRaw; dRaw = dMax; }
-        var phiA = Math.atan2(axT, -ayT);
-        var cosB = Math.max(-1, Math.min(1, (tl*tl + dRaw*dRaw - sl*sl) / (2 * tl * dRaw)));
-        thighX = phiA + Math.acos(cosB);
-        var kx = tl * Math.sin(thighX), ky = -tl * Math.cos(thighX);
-        shinAbs = Math.atan2(axT - kx, -(ayT - ky));
-        lowerX = shinAbs - thighX;
-      }
+      //
+      // Seat height and BOTH leg solves now BLEND continuously with bagF
+      // (the same drop-driven fraction as the root slide below) instead of
+      // snapping at a binary onBag threshold: the old switch flipped
+      // seatY 0.48 <-> 0.72 the instant drop crossed 0.12, mid-sit, which
+      // popped the figure ~0.24 down into the bag and swapped the whole
+      // leg solve in one frame — the visible sink-and-tilt of the old
+      // beanbag cycle.
+      var bagF = Math.max(0, Math.min(1, (a.drop - 0.10) / 0.07));
+      var seatY = 0.48 + 0.24 * bagF;
+      var thighSitB = 1.45;
+      var kneeYB = 0.72 - (D.thighLen || 0.51) * Math.cos(thighSitB);
+      var shinPhiB = Math.acos(Math.max(-1, Math.min(1, (kneeYB - (D.ankleH || 0.2)) / (D.shinLen || 0.57))));
+      // Desk / stool sit solved as two-bone IK to a planted foot: the ankle
+      // target sits ahead of the hip at standing ankle height, so the thigh
+      // runs forward from the hip, the shin drops from the knee to the
+      // floor and the sole lands flat (foot counter-pitch below). The old
+      // fixed angles left the whole leg jutting straight out under the
+      // desk with the soles facing the room.
+      var tl = D.thighLen || 0.51, sl = D.shinLen || 0.57, ah = D.ankleH || 0.15;
+      var axT = 0.60, ayT = ah - 0.48;
+      var dRaw = Math.hypot(axT, ayT), dMax = (tl + sl) * 0.995;
+      if (dRaw > dMax){ axT *= dMax / dRaw; ayT *= dMax / dRaw; dRaw = dMax; }
+      var phiA = Math.atan2(axT, -ayT);
+      var cosB = Math.max(-1, Math.min(1, (tl*tl + dRaw*dRaw - sl*sl) / (2 * tl * dRaw)));
+      var thighD = phiA + Math.acos(cosB);
+      var kx = tl * Math.sin(thighD), ky = -tl * Math.cos(thighD);
+      var shinAbsD = Math.atan2(axT - kx, -(ayT - ky));
+      var lowerD = shinAbsD - thighD;
+      var thighX = thighD + (thighSitB - thighD) * bagF;
+      var lowerX = lowerD + ((shinPhiB - thighSitB) - lowerD) * bagF;
       var lowerBase = -1.45*sitF + sitF*sitF*(lowerX + 1.45);
       // bone-local signs follow the samples' own axes: forward is -Z, left arm points -X
       poseBone(D, B.upperLegL, thighX*sitF + sw*0.55, 0, 0);
       poseBone(D, B.upperLegR, thighX*sitF - sw*0.55, 0, 0);
       poseBone(D, B.lowerLegL, lowerBase - (walking ? Math.max(0, sw)*0.7 : 0), 0, 0);
       poseBone(D, B.lowerLegR, lowerBase - (walking ? Math.max(0, -sw)*0.7 : 0), 0, 0);
-      if (!onBag){ // soles flat on the floor: cancel the shin's pitch at the ankle
-        var footX = -(thighX*sitF + lowerBase);
-        poseBone(D, B.footL, footX, 0, 0);
-        poseBone(D, B.footR, footX, 0, 0);
-      }
+      // Soles flat on the floor: cancel the shin's pitch at the ankle.
+      // This now applies on the beanbag too — its shin solve lands the
+      // ankle past the bag's front edge, on the floor — so the feet
+      // PLANT there instead of dangling toe-down into the slope (the old
+      // code skipped the counter-pitch whenever onBag).
+      var footX = -(thighX*sitF + lowerBase);
+      poseBone(D, B.footL, footX, 0, 0);
+      poseBone(D, B.footR, footX, 0, 0);
       var br = Math.sin(t*1.7 + a.phase) * 0.02;
       // desk workers lean in toward the screen a little; every so often the
       // head dips to glance at the keyboard, then returns to the monitor
@@ -1456,9 +1445,8 @@
       // solved angles — the feet simply land further under the desk, soles
       // still flat) brings both the keyboard and the mouse targets inside
       // reach with a naturally bent elbow. The beanbag seat is excluded
-      // via bagFrac: its calibration is unchanged.
-      var bagFrac = Math.max(0, Math.min(1, (a.drop - 0.10) / 0.07));
-      D.root.position.z = 0.17 * sitF * (1 - bagFrac);
+      // via bagF: its calibration is unchanged.
+      D.root.position.z = 0.17 * sitF * (1 - bagF);
       if (a.armAim > 0.01 && D.jShoulderL) aimArms(a, D, t);
       // Relaxed finger curl, blended with the desk-work pose: fingers fold
       // gently (proximal + middle joints, thumb less) so the hands settle
@@ -1517,11 +1505,40 @@
     function sendTo(a, dest, via, finalYaw, onArrive){
       var pts = [];
       var cur = a.group.position;
-      var det = detourPoint(cur, dest);
+      var arrive = onArrive || null;
+      var finalDest = dest;
+      if (a.cfg.beanbag){
+        // Beanbag routing: the bag's centre is a SEAT, not a floor point
+        // a walker should stride into. Trips to the bag end at
+        // bagFrontPos (standing point clear of the front slope) and the
+        // sit-driven slide in animateAgent covers the last stretch onto
+        // the cushion; trips away from the bag start with the reverse
+        // slide, so he steps DOWN off the bag before walking anywhere.
+        var toHome = dest.distanceTo(beanbagPos) < 0.05;
+        var distC = Math.hypot(cur.x - beanbagPos.x, cur.z - beanbagPos.z);
+        if (toHome){
+          a.bagLeaving = false;
+          if (distC > 0.35){
+            finalDest = bagFrontPos;
+            var innerArrive = arrive;
+            arrive = function(){
+              a.bagSeating = true; a.bagFrom = bagFrontPos.clone();
+              if (innerArrive) innerArrive();
+            };
+          }
+        } else {
+          a.bagSeating = false;
+          if (a.sit > 0.4 && distC < 1.15){
+            a.bagLeaving = true; a.bagFrom = cur.clone();
+            pts.push(bagFrontPos.clone());
+          } else if (a.sit <= 0.4) a.bagLeaving = false;
+        }
+      }
+      var det = detourPoint(cur, finalDest);
       if (via) via.forEach(function(v){ pts.push(v.clone()); });
       if (det && !via) pts.push(det);
-      pts.push(dest.clone());
-      a.path = pts; a.finalYaw = finalYaw; a.onArrive = onArrive || null;
+      pts.push(finalDest.clone());
+      a.path = pts; a.finalYaw = finalYaw; a.onArrive = arrive;
       a.sitTarget = 0; a.dropTarget = 0;
       if (a.state !== 'work') a.state = 'walk';
     }
@@ -1592,18 +1609,6 @@
       logEl.insertBefore(li, logEl.firstChild);
       while (logEl.children.length > 9) logEl.removeChild(logEl.lastChild);
     }
-    var toastWrap = document.getElementById('toasts');
-    function toast(kind, title, body){
-      var el = document.createElement('div');
-      el.className = 'toast' + (kind ? ' ' + kind : '');
-      el.innerHTML = '<div class="bell"><svg viewBox="0 0 24 24" fill="none" stroke="#3a2b00" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg></div><div><b></b><span></span></div>';
-      el.querySelector('b').textContent = title;
-      el.querySelector('span').textContent = body;
-      toastWrap.appendChild(el);
-      setTimeout(function(){ el.classList.add('out'); setTimeout(function(){ el.remove(); }, 350); }, 4200);
-      while (toastWrap.children.length > 3) toastWrap.removeChild(toastWrap.firstChild);
-    }
-
     /* ================= tasks ================= */
     var tasks = [], taskSeq = 0, meetingActive = false;
     var taskListEl = document.getElementById('taskList');
@@ -1660,7 +1665,6 @@
     function assignTask(title, preferredId, silent){
       var a = pickAgent(preferredId);
       if (!a){
-        toast('', 'Semua agen sibuk', 'Tugas “' + title + '” menunggu — semua agen sedang bekerja.');
         log('Tugas menunggu antrean: ' + title);
         return null;
       }
@@ -1670,7 +1674,7 @@
       a.pendingIdle = false; a.celebrateT = 0;
       freeSpot(a);
       if (!silent){
-        playCling(); toast('', 'Tugas baru masuk', title + ' → ' + a.cfg.name);
+        playCling();
         // Startle reaction on the exact event that plays the cling (manual
         // form, random button, demo auto-assign, queue dispatch — all of
         // them funnel through here non-silent): a quick hop + squash-and-
@@ -1688,12 +1692,15 @@
       var t = a.task; if (!t) return;
       t.progress = 100; t.status = 'Selesai'; a.task = null;
       playDone();
-      toast('done', 'Tugas selesai', t.title + ' — dikerjakan ' + a.cfg.name);
       log('Selesai: ' + t.title + ' (' + a.cfg.name + ')');
       renderTasks();
       // brief celebration (Kenney "emote-yes" / VRoid joy / procedural hop), then back to idle
       a.celebrateT = 1.6; a.pendingIdle = true;
       a.sitTarget = 0; a.dropTarget = 0; a.statusText = 'Tugas selesai!';
+      // Beanbag: the celebration rise doubles as the step-off — he slides
+      // from the cushion to the front standing point as he stands (see
+      // bagLeaving in animateAgent), so no "standing on the bag" phase.
+      if (a.cfg.beanbag){ a.bagLeaving = true; a.bagFrom = a.group.position.clone(); }
     }
     var waitQueue = [];
     setInterval(function(){
@@ -1704,10 +1711,9 @@
 
     /* ================= meeting (around the coffee table) ================= */
     function startMeeting(){
-      if (meetingActive) { toast('meet', 'Rapat sedang berjalan', 'Tim masih berkumpul di ruang tengah.'); return; }
+      if (meetingActive) { log('Rapat sedang berjalan — tim masih berkumpul di ruang tengah.'); return; }
       meetingActive = true;
       playMeet();
-      toast('meet', 'Rapat dimulai', 'Semua agen berkumpul mengelilingi meja kopi.');
       log('Rapat dipanggil — semua agen ke ruang tengah.');
       var shuffled = meeting.seats.slice();
       agents.forEach(function(a, i){
@@ -1727,7 +1733,6 @@
     }
     function endMeeting(){
       meetingActive = false;
-      toast('meet', 'Rapat selesai', 'Tim kembali ke aktivitas masing-masing.');
       log('Rapat selesai.');
       agents.forEach(function(a){
         if (a.meetSeat){ a.meetSeat.taken = null; a.meetSeat = null; }
@@ -1861,7 +1866,6 @@
         if (okCount === 0){
           styleSel.value = lastStyle; applyStyle(lastStyle);
           setNote('Gagal memuat berkas VRoid dari folder assets/characters — jalankan halaman ini lewat server statis/hosting agar folder assets terbaca (tidak bisa dari file://). Tetap memakai gaya ' + styleLabel(lastStyle) + '.');
-          toast('', 'VRoid gagal dimuat', 'Berkas assets/characters tidak terbaca. Tetap memakai gaya ' + styleLabel(lastStyle) + '.');
           log('Model VRoid gagal dimuat — tetap di gaya ' + styleLabel(lastStyle) + '.');
         } else {
           lastStyle = 'vroid'; applyStyle('vroid');
@@ -2008,7 +2012,30 @@
       if (a.bangT > 0) a.bangT = Math.max(0, a.bangT - dtW);
       var stProg = a.startleT > 0 ? 1 - a.startleT/0.55 : 1;
       a.startleEnv = a.startleT > 0 ? Math.sin(stProg * Math.PI) : 0;
-      if (a.path.length){
+      // Beanbag step-off / step-on slides (Fajar only), driven by the sit
+      // amount itself so position and pose can never disagree:
+      //  - bagLeaving: as sit falls he slides from wherever he sat (the
+      //    cushion centre) out to the standing point in front of the bag.
+      //    The walk path is gated until the slide lands, so he is never
+      //    seen standing or striding on top of the bag.
+      //  - bagSeating: as sit rises he slides from that front point in to
+      //    the cushion centre, already turned to the laptop (finalYaw was
+      //    applied on arrival) instead of walking into the bag upright
+      //    and sinking into it facing his approach direction.
+      if (a.cfg.beanbag){
+        if (a.bagLeaving){
+          var lvFrom = a.bagFrom || bagFrontPos;
+          p.x = bagFrontPos.x + (lvFrom.x - bagFrontPos.x) * a.sit;
+          p.z = bagFrontPos.z + (lvFrom.z - bagFrontPos.z) * a.sit;
+          if (a.sit < 0.05){ a.bagLeaving = false; p.x = bagFrontPos.x; p.z = bagFrontPos.z; }
+        } else if (a.bagSeating){
+          var stFrom = a.bagFrom || bagFrontPos;
+          p.x = stFrom.x + (beanbagPos.x - stFrom.x) * a.sit;
+          p.z = stFrom.z + (beanbagPos.z - stFrom.z) * a.sit;
+          if (a.sit > 0.98){ a.bagSeating = false; p.x = beanbagPos.x; p.z = beanbagPos.z; }
+        }
+      }
+      if (a.path.length && !a.bagLeaving){
         var target = a.path[0];
         var dx = target.x - p.x, dz = target.z - p.z;
         var dist = Math.hypot(dx, dz);
@@ -2027,6 +2054,7 @@
           moving = true;
         }
       }
+      a._moving = moving;
       // Safety net: no agent may ever stand or walk outside the floor slab.
       p.x = Math.max(-FW/2 + 0.45, Math.min(FW/2 - 0.45, p.x));
       p.z = Math.max(-FD/2 + 0.45, Math.min(FD/2 - 0.45, p.z));
@@ -2127,21 +2155,30 @@
         sy = Math.max(topPad, Math.min(stage.clientHeight - 8, sy - (a.tagLift || 0)));
         a.tag.style.transform = 'translate(' + sx.toFixed(1) + 'px,' + sy.toFixed(1) + 'px) translate(-50%,-115%)';
       }
-      // "!!" starburst badge floats a little above the name tag while bangT runs down
+      // "!!" starburst badge pops BESIDE the head at head height — like
+      // the reference cartoon, where the marks sit right next to the face
+      // with the burst behind them — not floating high above the name
+      // tag. The anchor is the head centre (lowered by the current sit
+      // amount, raised by the startle hop) pushed sideways along the
+      // camera's right vector, so it hugs the head from any angle and
+      // never hides behind the name tag.
       if (a.bang){
         if (a.bangT > 0 && vis){
-          projV.set(p.x, (a.tagY || 1.8) + 0.52, p.z).project(camera);
+          var hdDrop = (a.headDrop || 0.45) - (a.drop > 0.12 ? 0.2 : 0);
+          var headY = (a.headY0 || 1.9) - a.sit * hdDrop + p.y;
+          var camEl = camera.matrixWorld.elements;
+          var sideOff = a.headSide || 0.4;
+          projV.set(p.x + camEl[0] * sideOff, headY, p.z + camEl[2] * sideOff).project(camera);
           var bx = (projV.x*0.5 + 0.5) * stage.clientWidth;
           var by = (-projV.y*0.5 + 0.5) * stage.clientHeight;
+          bx = Math.max(30, Math.min(stage.clientWidth - 30, bx));
+          by = Math.max(34, Math.min(stage.clientHeight - 30, by));
           var bp = 1 - a.bangT/1.0;
           var bs = bp < 0.18 ? 0.35 + (bp/0.18)*0.65 : 1 + Math.sin(bp * Math.PI) * 0.07;
           a.bang.style.display = 'block';
-          a.bang.style.transform = 'translate(' + bx.toFixed(1) + 'px,' + by.toFixed(1) + 'px) translate(-50%,-100%) scale(' + bs.toFixed(2) + ')';
+          a.bang.style.transform = 'translate(' + bx.toFixed(1) + 'px,' + by.toFixed(1) + 'px) translate(-50%,-50%) scale(' + bs.toFixed(2) + ')';
         } else if (a.bang.style.display !== 'none') a.bang.style.display = 'none';
       }
-      a.tagState.textContent = a.task ? a.task.title : a.statusText;
-      a.tag.className = 'tag' + (a.state === 'work' ? ' working' : '');
-      if (a.task) a.tagBar.style.width = a.task.progress.toFixed(0) + '%';
       var dotColor = a.state === 'work' ? '#57e6b8' : (a.state === 'meeting' ? '#7cc4ff' : (a.path.length ? '#ffc94d' : '#8be0a4'));
       a.tagDot.style.background = dotColor;
       a.rosterStatus.textContent = a.task ? ('Bekerja · ' + Math.round(a.task.progress) + '%') : a.statusText;
