@@ -207,8 +207,8 @@
           <div class="card">
             <label class="f" for="styleSel">Model agen</label>
             <select id="styleSel">
-              <option value="kenney" selected>Kenney — Mini Characters (CC0)</option>
-              <option value="vroid">VRoid — AvatarSample (berkas lokal)</option>
+              <option value="kenney">Kenney — Mini Characters (CC0)</option>
+              <option value="vroid" selected>VRoid — AvatarSample (berkas lokal)</option>
               <option value="kode">Kode — Chibi prosedural</option>
             </select>
             <p id="styleNote" class="stylestatus" hidden></p>
@@ -249,7 +249,7 @@
           <ul id="log"></ul>
         </section>
 
-        <p class="foot">Geser untuk memutar kamera, cubit / scroll untuk zoom. Klik nama anggota tim untuk menyorot tempatnya. Tombol jam di atas melompat ke fase siang / senja / malam berikutnya. Karakter: Kenney Mini Characters (CC0). Model VRoid adalah contoh resmi VRoid AvatarSample — semua berkas karakter tersimpan lokal di folder assets/characters dan dimuat saat opsinya dipilih. Ini prototipe mandiri dengan data simulasi — belum terhubung ke Hermes atau sistem agen nyata.</p>
+        <p class="foot">Geser untuk memutar kamera, cubit / scroll untuk zoom. Klik nama anggota tim untuk menyorot tempatnya. Tombol jam di atas melompat ke fase siang / senja / malam berikutnya. Karakter: Kenney Mini Characters (CC0). Model VRoid adalah contoh resmi VRoid AvatarSample — semua berkas karakter tersimpan lokal di folder assets/characters dan dimuat secara bawaan saat halaman dibuka (VRoid adalah gaya default). Ini prototipe mandiri dengan data simulasi — belum terhubung ke Hermes atau sistem agen nyata.</p>
       </aside>
     </div>
 
@@ -1052,7 +1052,7 @@
     // and the beanbag. Seated leg angles are re-solved from the measured bone
     // lengths in updateVRM, so the bigger scale does not push feet through the floor.
     var VRM_H = CHAR_H * 1.5;
-    var charStyle = 'kenney';
+    var charStyle = 'vroid';
 
     function refreshVisibility(a){
       var showK = charStyle === 'kenney' && !!a.kenney;
@@ -1273,6 +1273,7 @@
       a.vrmData = D;
       refreshVisibility(a);
     }
+    if (THREE.Cache) THREE.Cache.enabled = true; // AvatarSample A/B serve two agents each — fetch their bytes once
     function loadOneVRM(a){
       return new Promise(function(res){
         new THREE.GLTFLoader().load(VRM_URLS[a.cfg.id],
@@ -1820,7 +1821,18 @@
       var session = ++vrmSession;
       setNote('Memuat model VRoid… berkas besar (±15 MB per model) dari folder assets lokal.');
       log('Memuat model VRoid…');
-      Promise.all(agents.map(function(a){ return a.vrmData ? Promise.resolve(true) : loadOneVRM(a); })).then(function(results){
+      // Load sequentially, not in parallel: five concurrent glTF parses of
+      // ±15 MB files saturate the main thread for a long stretch on modest
+      // hardware (this is now the default style, so it runs on first load).
+      // One at a time keeps the office rendering between models; the end
+      // state — cast swapped in once every model has arrived — is unchanged.
+      var chain = Promise.resolve(), results = [];
+      agents.forEach(function(a){
+        chain = chain.then(function(){
+          return (a.vrmData ? Promise.resolve(true) : loadOneVRM(a)).then(function(r){ results.push(r); });
+        });
+      });
+      chain.then(function(){ return results; }).then(function(results){
         if (session !== vrmSession || styleSel.value !== 'vroid') return;
         var okCount = 0;
         results.forEach(function(r){ if (r) okCount++; });
@@ -1838,6 +1850,18 @@
         }
       });
     });
+    // VRoid is the default style: on first load, run the exact same
+    // lazy-load path a manual dropdown change uses — the "Memuat model
+    // VRoid…" note shows until the models arrive, the panel/UI render
+    // immediately, and the cast swaps in once loading finishes. If the
+    // load fails, the handler above falls back to Kenney as before.
+    if (styleSel.value === 'vroid'){
+      // deferred a beat so the office paints its first frame (with the
+      // loading note) before the first model parse starts
+      window.setTimeout(function(){
+        if (styleSel.value === 'vroid') styleSel.dispatchEvent(new Event('change'));
+      }, 120);
+    }
 
     /* ================= day / night cycle ================= */
     var cycle = { p: 0.30, len: 76, df: 1, lastDraw: -1 };
