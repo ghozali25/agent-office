@@ -696,19 +696,38 @@
     (function buildBeanbag(){
       var grp = new THREE.Group(); grp.position.copy(beanbagPos); grp.rotation.y = beanbagYaw; office.add(grp);
       var bagMat = mat(MUSTARD, 0.95);
-      var bag = new THREE.Mesh(new THREE.SphereGeometry(0.88, 26, 20), bagMat);
-      bag.scale.set(1, 0.52, 1); bag.position.y = 0.3; bag.castShadow = true; bag.receiveShadow = true; grp.add(bag);
-      var bagTop = new THREE.Mesh(new THREE.SphereGeometry(0.6, 22, 16), bagMat);
-      bagTop.scale.set(1, 0.45, 1); bagTop.position.y = 0.52; bagTop.castShadow = true; grp.add(bagTop);
-      // laptop resting on the beanbag, facing the sitter
-      var lap = new THREE.Group(); lap.position.set(0, 0.52, 0.52); lap.rotation.x = -0.18; grp.add(lap);
-      var lbase = rbox(0.56, 0.03, 0.38, 0xb9c4cf, 0.35); lap.add(lbase);
-      var lscr = new THREE.Group(); lscr.position.set(0, 0.02, 0.19); lscr.rotation.x = -0.32; lap.add(lscr);
-      var lbez = rbox(0.56, 0.4, 0.03, 0x1d2733, 0.35); lbez.position.y = 0.2; lscr.add(lbez);
-      beanbagScreen = screenMesh(0.5, 0.33, '#5da85e'); beanbagScreen.position.set(0, 0.2, -0.02); beanbagScreen.rotation.y = Math.PI; lscr.add(beanbagScreen);
-      // small side stool with a cup
-      var stool = cyl(0.2, 0.17, 0.34, 0x8a5a34, 14, 0.6); stool.position.set(1.15, 0.17, 0.3); grp.add(stool);
-      var cup2 = cyl(0.05, 0.042, 0.1, 0x4361aa, 12, 0.4); cup2.position.set(1.15, 0.39, 0.3); grp.add(cup2);
+      // Seat cushion: a wide, LOW squashed ellipsoid whose top at the centre is
+      // exactly the 0.60 seat height the sitters are calibrated to. The old
+      // pair of centred spheres peaked at 0.79 right under the sitter, so a
+      // pelvis seated at 0.60 — and the whole thigh in front of it — ended up
+      // INSIDE the cushion, with only the shoes poking out of its front edge.
+      // The front-back radius (0.62) is much shorter than the width (0.95), so
+      // seated legs slope down clear of the front slope and feet land on the
+      // floor past the bag instead of inside it.
+      var bag = new THREE.Mesh(new THREE.SphereGeometry(0.95, 26, 20), bagMat);
+      bag.scale.set(1, 0.34, 0.65); bag.position.y = 0.277; bag.castShadow = true; bag.receiveShadow = true; grp.add(bag);
+      // Backrest blob BEHIND the sitter (local -Z) instead of a dome centred
+      // on the seat: it supports the sitter's back without swallowing the body.
+      var bagBack = new THREE.Mesh(new THREE.SphereGeometry(0.62, 22, 16), bagMat);
+      bagBack.scale.set(1.05, 0.74, 0.85); bagBack.position.set(0, 0.44, -0.55); bagBack.castShadow = true; bagBack.receiveShadow = true; grp.add(bagBack);
+      // Laptop ON the sitter's lap, sized for the 2.28-tall VRoid cast: the
+      // base rests on the near-horizontal thighs (top ~0.78 in front of the
+      // hips at 0.72), keyboard deck up, screen hinged at the FAR edge and
+      // leaning slightly AWAY from the sitter, display facing back at them.
+      // The old placement (y 0.52 at z 0.52) sat below the cushion surface
+      // there, so the base was buried in the bag and only the black screen
+      // slab showed, tilted over toward the sitter.
+      var lap = new THREE.Group(); lap.position.set(0, 0.775, 0.3); lap.rotation.x = 0.08; grp.add(lap);
+      var lbase = rbox(0.62, 0.03, 0.38, 0xb9c4cf, 0.35); lap.add(lbase);
+      var lkeys = rbox(0.52, 0.012, 0.25, 0x2b3440, 0.5); lkeys.position.set(0, 0.02, -0.03); lap.add(lkeys);
+      var lscr = new THREE.Group(); lscr.position.set(0, 0.015, 0.19); lscr.rotation.x = 0.22; lap.add(lscr);
+      var lbez = rbox(0.62, 0.42, 0.03, 0x1d2733, 0.35); lbez.position.y = 0.21; lscr.add(lbez);
+      beanbagScreen = screenMesh(0.56, 0.36, '#5da85e'); beanbagScreen.position.set(0, 0.21, -0.02); beanbagScreen.rotation.y = Math.PI; lscr.add(beanbagScreen);
+      // small side stool with a cup — pulled well clear of the bag (centre
+      // distance 1.48 vs bag radius 0.95) so no part of it can poke through
+      // or under the cushion from any camera angle
+      var stool = cyl(0.2, 0.17, 0.34, 0x8a5a34, 14, 0.6); stool.position.set(1.42, 0.17, 0.42); grp.add(stool);
+      var cup2 = cyl(0.05, 0.042, 0.1, 0x4361aa, 12, 0.4); cup2.position.set(1.42, 0.39, 0.42); grp.add(cup2);
     })();
 
     /* ---------- meeting: stools around the coffee table ---------- */
@@ -963,10 +982,11 @@
       }
       k.mixer.update(dt);
       var typing = (a.state === 'work' && a.sit > 0.7);
-      // Seat the pelvis ON the furniture, with the same target heights the VRoid
-      // rig uses (beanbag 0.60, chair/stool 0.48). The sit clip alone drops the
-      // pelvis to ~0.06 above the floor, which buried the body inside the
-      // beanbag (only the head poked out) and inside the desk chairs.
+      // Seat the pelvis ON the furniture: here seatY is the pelvis BOTTOM, so
+      // the beanbag target is the cushion top itself (0.60) and chairs/stools
+      // are 0.48 (the VRoid rig targets its hip joint ~0.12 higher instead).
+      // The sit clip alone drops the pelvis to ~0.06 above the floor, which
+      // buried the body inside the beanbag and inside the desk chairs.
       var seatY = a.drop > 0.12 ? 0.60 : 0.48;
       k.root.position.y = (seatY - (k.sitPelvis || 0.06)) * a.sit + (typing ? Math.sin(t*9 + a.phase) * 0.012 : 0);
       k.root.rotation.x = typing ? Math.sin(t*9 + a.phase) * 0.02 : 0;
@@ -1076,13 +1096,17 @@
       var walking = a.path.length > 0;
       var sitF = a.sit;
       var sw = walking ? Math.sin(a.phase) : 0;
-      var seatY = a.drop > 0.12 ? 0.60 : 0.48; // beanbag top vs chair seat (also drives sitDrop below)
-      // Seated leg solve for the enlarged scale: the thigh sits lower-forward on
-      // the beanbag than on a chair, and the shin tilts forward by exactly the
-      // angle that returns the ankle to its standing height — computed from the
-      // measured bone lengths, so soles rest on the floor instead of sinking
-      // through it (a vertical shin at this scale would bury them ~0.25).
-      var thighSit = a.drop > 0.12 ? 1.12 : 1.5;
+      var onBag = a.drop > 0.12;
+      // Beanbag vs chair seat (also drives sitDrop below). The beanbag cushion
+      // top is 0.60, but the hip JOINT rides ~0.12 above it — the pelvis rests
+      // ON the cushion, not in it. Putting the joint at 0.60 with the old
+      // 1.12 thigh angle dropped the knees to 0.38 in front of a cushion whose
+      // surface there was ~0.70: the whole thigh vanished inside the bag.
+      // On the bag the thigh now stays near-horizontal (1.45), so the knees
+      // ride above the cushion's front slope, and the shin solve below drops
+      // the feet to the floor past the bag's shortened front edge (0.62).
+      var seatY = onBag ? 0.72 : 0.48;
+      var thighSit = onBag ? 1.45 : 1.5;
       var kneeY = seatY - (D.thighLen || 0.51) * Math.cos(thighSit);
       var shinPhi = Math.acos(Math.max(-1, Math.min(1, (kneeY - (D.ankleH || 0.2)) / (D.shinLen || 0.57))));
       var lowerSit = shinPhi - thighSit;
@@ -1595,6 +1619,13 @@
       a.drop += (a.dropTarget - a.drop) * Math.min(1, dt*5);
       var sit = a.sit;
       a.hips.position.y = 0.31 - sit*0.02 - a.drop;
+      // Beanbag (drop ≈ 0.17): the procedural body is built around a low hip,
+      // so unlifted its torso would sink into the cushion (top 0.60) and its
+      // legs would vanish inside the bag. Raise the whole body while seated
+      // on the bag so the butt rests on the cushion and the shoes land on the
+      // bag's front slope; the factor ramps with drop so there is no pop.
+      var bagF = Math.max(0, Math.min(1, (a.drop - 0.10) / 0.07));
+      a.proc.position.y = bagF * sit * 0.48;
       var walkSwing = 0;
       if (moving){ a.phase += dt * 8.5; walkSwing = Math.sin(a.phase); }
       else a.phase += dt * 1.4;
