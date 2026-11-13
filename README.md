@@ -17,9 +17,22 @@ Prototipe standalone kantor virtual 3D bergaya **chibi**: lima agen AI berkepala
 - Preset kamera (Isometrik / Atas / Ruang Tengah / Beanbag) plus orbit dan zoom bebas
 - Panel antrean tugas, roster tim yang bisa diklik untuk menyorot agen, dan log aktivitas
 
+## Struktur
+
+- `index.html` — aplikasinya (Three.js tertanam di dalamnya)
+- `assets/characters/` — semua berkas model karakter, dipanggil `index.html` lewat path relatif:
+  - Kenney Mini Characters (CC0): `character-female-a/b/c.glb`, `character-male-a/b.glb`, `aid-glasses.glb` (kacamata Bima)
+  - VRoid AvatarSample (contoh resmi VRoid/pixiv): `AvatarSample_A/B/C.vrm`
+  - Sumber & lisensi tiap karakter: `assets/characters/CREDITS.md`
+
 ## Menjalankan
 
-Cukup buka `index.html` di browser modern (Chrome/Edge/Firefox/Safari) — seluruh aplikasi berada dalam satu berkas HTML, tanpa proses build dan tanpa server. Koneksi internet diperlukan saat pertama kali memuat pustaka Three.js dari CDN.
+Halaman ini harus dibuka lewat server statis/hosting agar folder `assets/` terbaca oleh browser (membuka `index.html` langsung dari berkas/file:// akan gagal memuat model):
+
+- **GitHub Pages**: https://ghozali25.github.io/agent-office/
+- **Lokal**: jalankan server statis di folder ini, mis. `npx serve .` atau `python3 -m http.server`, lalu buka alamat yang diberikan.
+
+Gaya karakter diganti lewat dropdown "Model agen" di panel: **Kenney** (default), **VRoid**, atau **Kode** (chibi prosedural bawaan).
 
 ## Status
 
