@@ -55,6 +55,30 @@
         font-weight:900; font-size:21px; color:#2a1608; letter-spacing:-2px; line-height:1;
         transform:rotate(-7deg);
       }
+      /* Floating "Z Z Z" for an agent asleep at their desk: three letters
+         beside the head that swell, drift upward and fade in rotation,
+         the classic comic sleep glyph (companion to the "!!" badge). */
+      .zzz{
+        position:absolute; left:0; top:0; width:64px; height:84px;
+        pointer-events:none; will-change:transform; z-index:4;
+      }
+      .zzz span{
+        position:absolute; font-weight:900; line-height:1; opacity:0;
+        color:#a9c8ff; text-shadow:0 2px 0 rgba(18,38,80,.55), 0 0 7px rgba(120,170,255,.4);
+        animation:zfloat 2.7s ease-in-out infinite;
+      }
+      .zzz .z1{ left:4px; bottom:4px; font-size:15px; }
+      .zzz .z2{ left:21px; bottom:15px; font-size:20px; animation-delay:.9s; }
+      .zzz .z3{ left:39px; bottom:29px; font-size:27px; animation-delay:1.8s; }
+      @keyframes zfloat{
+        0%{ opacity:0; transform:translateY(9px) rotate(-11deg) scale(.65); }
+        35%{ opacity:1; }
+        70%{ opacity:.85; }
+        100%{ opacity:0; transform:translateY(-17px) rotate(13deg) scale(1.12); }
+      }
+      @media (prefers-reduced-motion: reduce){
+        .zzz span{ animation-duration:5.4s; }
+      }
 
       #topbar{
         position:absolute; top:10px; left:10px; right:10px; z-index:5;
@@ -136,7 +160,10 @@
       #log li:last-child{ border-bottom:none; }
       #log time{ color:var(--muted); font-variant-numeric:tabular-nums; flex:none; font-size:11.5px; padding-top:1px; }
       .foot{ font-size:11.5px; color:var(--muted); line-height:1.55; border-top:1px solid var(--line); padding-top:12px; }
-      #styleSel{ margin-bottom:6px; }
+      #btnRetryVrm{ margin-bottom:6px; }
+      /* the .btn display rule would otherwise override the hidden
+         attribute and keep the retry button permanently visible */
+      #btnRetryVrm[hidden]{ display:none; }
       .stylestatus{ font-size:12px; color:var(--muted); line-height:1.5; margin:2px 0 0; }
 
       @media (max-width: 860px){
@@ -183,19 +210,10 @@
 
       <aside id="panel">
         <h1>Kantor Virtual 3D</h1>
-        <p class="sub">Diorama kantor chibi dalam satu ruangan hangat: lima agen AI bekerja di meja berkursi mustard dan beanbag besar. Jendela beralih dari siang berbukit hijau ke malam berlampu gedung — kantor ini bekerja 24/7. Setiap tugas yang kamu kirim disambut bunyi <b>“cling”</b>, dan agen penerimanya terkejut sesaat (tanda “!!” berkilau di samping kepala). Monitor hanya menyala saat agennya sedang bekerja; selebihnya layarnya tidur (sleep) seperti monitor sungguhan.</p>
+        <p class="sub">Diorama kantor dalam satu ruangan hangat: lima agen AI bekerja di meja berkursi mustard dan beanbag besar. Jendela beralih dari siang berbukit hijau ke malam berlampu gedung — kantor ini bekerja 24/7. Setiap tugas yang kamu kirim disambut bunyi <b>“cling”</b>, dan agen penerimanya terkejut sesaat (tanda “!!” berkilau di samping kepala). Monitor hanya menyala saat agennya sedang bekerja; selebihnya layarnya tidur (sleep) seperti monitor sungguhan. Saat santai, agen bergantian <b>tidur di meja</b> (dengan efek “Zzz” melayang), <b>mengambil buku dari lemari</b> untuk dibaca — berdiri, di mejanya, atau di meja rapat — atau <b>membuat kopi</b> di mesin kopi lalu menikmatinya di meja rapat.</p>
 
-        <section class="sec">
-          <h2>Gaya Karakter</h2>
-          <div class="card">
-            <label class="f" for="styleSel">Model agen</label>
-            <select id="styleSel">
-              <option value="kenney">Kenney — Mini Characters (CC0)</option>
-              <option value="vroid" selected>VRoid — AvatarSample (berkas lokal)</option>
-            </select>
-            <p id="styleNote" class="stylestatus" hidden></p>
-          </div>
-        </section>
+        <p id="modelStatus" class="stylestatus" hidden></p>
+        <button class="btn ghost" id="btnRetryVrm" type="button" hidden style="margin:0 0 13px">Coba Muat Ulang Model</button>
 
         <section class="sec">
           <h2>Kirim Tugas</h2>
@@ -231,7 +249,7 @@
           <ul id="log"></ul>
         </section>
 
-        <p class="foot">Geser untuk memutar kamera, cubit / scroll untuk zoom. Klik nama anggota tim untuk menyorot tempatnya. Tombol jam di atas melompat ke fase siang / senja / malam berikutnya. Karakter: Kenney Mini Characters (CC0). Model VRoid adalah contoh resmi VRoid AvatarSample — semua berkas karakter tersimpan lokal di folder assets/characters dan dimuat secara bawaan saat halaman dibuka (VRoid adalah gaya default). Ini prototipe mandiri dengan data simulasi — belum terhubung ke Hermes atau sistem agen nyata.</p>
+        <p class="foot">Geser untuk memutar kamera, cubit / scroll untuk zoom. Klik nama anggota tim untuk menyorot tempatnya. Tombol jam di atas melompat ke fase siang / senja / malam berikutnya. Karakter: contoh resmi VRoid AvatarSample — semua berkas karakter tersimpan lokal di folder assets/characters dan dimuat saat halaman dibuka. Ini prototipe mandiri dengan data simulasi — belum terhubung ke Hermes atau sistem agen nyata.</p>
       </aside>
     </div>
 
@@ -570,6 +588,26 @@
       });
       var drip = box(0.34, 0.04, 0.2, 0x9fb2c4, 0.5); drip.position.set(0, 0.62, 0.3); cooler.add(drip);
 
+      /* coffee machine right beside the water cooler — the coffee idle
+         scene brews here (agent stands at BREW_POS in front of it) before
+         carrying the cup to the meeting table */
+      var cm = new THREE.Group(); cm.position.set(-5.55, 0, 2.18); cm.rotation.y = Math.PI/2; office.add(cm);
+      var cmBody = rbox(0.6, 0.92, 0.52, 0x39424c, 0.4); cmBody.position.y = 0.46; cm.add(cmBody);
+      var cmStripe = box(0.61, 0.1, 0.53, 0x232a31, 0.45); cmStripe.position.y = 0.16; cm.add(cmStripe);
+      var cmTop = rbox(0.64, 0.06, 0.56, 0x232a31, 0.4); cmTop.position.y = 0.95; cm.add(cmTop);
+      var hopper = cyl(0.13, 0.15, 0.22, 0x6b4a2a, 14, 0.5); hopper.position.set(-0.13, 1.09, 0); cm.add(hopper);
+      var hopperLid = cyl(0.14, 0.14, 0.03, 0x2b333c, 14, 0.4); hopperLid.position.set(-0.13, 1.21, 0); cm.add(hopperLid);
+      var tank = cyl(0.1, 0.1, 0.3, 0x9fc6e8, 12, 0.25); tank.position.set(0.16, 1.12, -0.05); cm.add(tank);
+      var cmFace = box(0.5, 0.3, 0.03, 0x1d232a, 0.4); cmFace.position.set(0, 0.72, 0.27); cm.add(cmFace);
+      var cmLight = new THREE.Mesh(new THREE.SphereGeometry(0.028, 10, 8), glowMat(0xffb84d, 0.8));
+      cmLight.position.set(-0.17, 0.78, 0.29); cm.add(cmLight);
+      var cmDial = cyl(0.035, 0.035, 0.02, 0xb9c4cf, 12, 0.35); cmDial.rotation.x = Math.PI/2; cmDial.position.set(0.14, 0.78, 0.29); cm.add(cmDial);
+      var spout = box(0.08, 0.1, 0.08, 0xb9c4cf, 0.3); spout.position.set(0.05, 0.55, 0.28); cm.add(spout);
+      var pfHandle = box(0.17, 0.035, 0.05, 0x14181d, 0.4); pfHandle.position.set(0.17, 0.5, 0.28); pfHandle.rotation.y = 0.25; cm.add(pfHandle);
+      var cmTray = box(0.44, 0.03, 0.2, 0x9fb2c4, 0.35); cmTray.position.set(0.02, 0.3, 0.3); cm.add(cmTray);
+      var cmCup = cyl(0.045, 0.038, 0.085, 0xffffff, 12, 0.4); cmCup.position.set(0.05, 0.36, 0.3); cm.add(cmCup);
+      var cmCupTop = cyl(0.041, 0.041, 0.012, 0x4a2c14, 12, 0.6); cmCupTop.position.set(0.05, 0.4, 0.3); cm.add(cmCupTop);
+
       /* centre: round rug + small wooden coffee table with book & cup */
       var rugM = new THREE.Mesh(new THREE.CylinderGeometry(2.5, 2.5, 0.035, 40), mat(0xe9dcc2, 1));
       rugM.position.set(0, 0.02, 0.8); rugM.receiveShadow = true; office.add(rugM);
@@ -852,7 +890,7 @@
        floating open in mid-air next to an empty beanbag. */
     var LAP_POSE = { pos:new THREE.Vector3(0, 0.775, 0.3),     rx:0.08,  ry:0,    hinge:0.22 };
     var BAG_POSE = { pos:new THREE.Vector3(0.03, 0.618, -0.03), rx:-0.03, ry:0.22, hinge:-1.52 };
-    var bagLapAmt = 1; // Fajar starts the day seated on the bag, laptop open
+    var bagLapAmt = 0; // Fajar opens the day reading at the meeting table, so the laptop starts CLOSED on the bag
     function updateBagLaptop(dt){
       if (!bagLap || !bagLapHinge) return;
       var f = null;
@@ -913,12 +951,11 @@
       var grp = new THREE.Group();
       var proc = new THREE.Group(); grp.add(proc);
       var hips = new THREE.Group(); hips.position.y = 0.31; proc.add(hips);
-      // No procedural body is built here anymore: the visible figure is
-      // always a loaded model (VRoid by default, Kenney as the alternative
-      // style and standing fallback). These pivots carry no meshes —
-      // animateAgent still poses them every frame, and the work-cycle
-      // timers computed alongside them (typing <-> mouse, glances) also
-      // drive the VRoid rig, so the pivots stay but no chibi mesh exists.
+      // No procedural body is built here: the visible figure is always
+      // the loaded VRoid model (the only cast). These pivots carry no
+      // meshes — animateAgent still poses them every frame, and the
+      // work-cycle timers computed alongside them (typing <-> mouse,
+      // glances) also drive the VRoid rig, so the pivots stay.
       var headG = new THREE.Group(); headG.position.y = 0.36; hips.add(headG);
       // short arms
       function makeArm(side){
@@ -945,7 +982,9 @@
               glanceT:2 + Math.random()*3, seed:Math.random()*20 }, glanceAmt:0, armAim:0,
         state:'idle', path:[], speed:2.2, yaw:0, targetYaw:0, sit:0, sitTarget:0, drop:0, dropTarget:0,
         phase:Math.random()*6.28, task:null, spot:null, idleSpot:null, statusText:'Santai',
-        tag:null, seatPos:null, homeDrop:0, bagLeaving:false, bagSeating:false, bagFrom:null };
+        tag:null, seatPos:null, homeDrop:0, bagLeaving:false, bagSeating:false, bagFrom:null,
+        scene:null, sceneSeat:null, sleepAmt:0, readAmt:0, coffeeAmt:0,
+        bookProp:null, cupProp:null, zzz:null, propK:1 };
     }
 
     var agents = [];
@@ -984,13 +1023,37 @@
       bang.innerHTML = '<svg viewBox="0 0 100 100" aria-hidden="true"><polygon fill="#f6a821" stroke="#7a3c00" stroke-width="3" stroke-linejoin="round" points="97,50 78,57.5 90.7,73.5 70.5,70.5 73.5,90.7 57.5,78 50,97 42.5,78 26.5,90.7 29.5,70.5 9.3,73.5 22,57.5 3,50 22,42.5 9.3,26.5 29.5,29.5 26.5,9.3 42.5,22 50,3 57.5,22 73.5,9.3 70.5,29.5 90.7,26.5 78,42.5"/></svg><span>!!</span>';
       labelWrap.appendChild(bang);
       a.bang = bang;
+      // Floating "Z Z Z" glyph, shown while this agent sleeps at their
+      // desk (positioned beside the head in animateAgent, like the badge).
+      var zzz = document.createElement('div');
+      zzz.className = 'zzz'; zzz.style.display = 'none';
+      zzz.innerHTML = '<span class="z1">Z</span><span class="z2">Z</span><span class="z3">Z</span>';
+      labelWrap.appendChild(zzz);
+      a.zzz = zzz;
+      // Hand props for the idle scenes — an open book (reading scene) and
+      // a coffee cup (coffee scene). Both ride inside the agent group so
+      // they follow every walk/sit automatically; they stay hidden until
+      // their scene moment shows them, and endScene hides them again so
+      // no prop is ever left dangling in a working agent's hands.
+      var book = new THREE.Group();
+      var cover = box(0.37, 0.025, 0.25, a.cfg.shirt, 0.6); book.add(cover);
+      var pgL = box(0.165, 0.012, 0.23, 0xf7f1de, 0.9); pgL.position.set(-0.086, 0.02, 0); pgL.rotation.z = 0.16; book.add(pgL);
+      var pgR = box(0.165, 0.012, 0.23, 0xf7f1de, 0.9); pgR.position.set(0.086, 0.02, 0); pgR.rotation.z = -0.16; book.add(pgR);
+      book.visible = false; a.group.add(book); a.bookProp = book;
+      var cup = new THREE.Group();
+      var cupBody = cyl(0.048, 0.04, 0.095, 0xffffff, 12, 0.4); cup.add(cupBody);
+      var coffeeTop = cyl(0.044, 0.044, 0.012, 0x4a2c14, 12, 0.6); coffeeTop.position.y = 0.045; cup.add(coffeeTop);
+      var ear = new THREE.Mesh(new THREE.TorusGeometry(0.032, 0.009, 8, 14), mat(0xffffff, 0.4));
+      ear.position.set(0.056, 0, 0); ear.castShadow = true; cup.add(ear);
+      cup.visible = false; a.group.add(cup); a.cupProp = cup;
     });
 
-    /* ================= character styles: VRoid (default) / Kenney ================= */
-    var KENNEY_SRC = {
-      sinta:'assets/characters/character-female-a.glb', dewi:'assets/characters/character-female-b.glb', nadia:'assets/characters/character-female-c.glb',
-      bima:'assets/characters/character-male-a.glb', fajar:'assets/characters/character-male-b.glb', glasses:'assets/characters/aid-glasses.glb'
-    };
+    /* ================= characters: VRoid only =================
+       The cast is exclusively the VRoid AvatarSample models — there is no
+       alternative style and no stand-in cast. An agent simply appears
+       (swaps in) when its own VRM has loaded; until then it has no body,
+       and if a file fails outright the panel shows a per-agent load
+       status with a retry button instead of swapping in another style. */
     var VRM_URLS = {
       sinta:'assets/characters/AvatarSample_A.vrm',
       dewi:'assets/characters/AvatarSample_B.vrm',
@@ -998,37 +1061,33 @@
       bima:'assets/characters/AvatarSample_A.vrm',
       fajar:'assets/characters/AvatarSample_B.vrm'
     };
-    var CHAR_H = 1.52;
-    // VRoid samples are slim real-proportioned figures: at the same measured 1.52
-    // height as the Kenney cast they read as tiny dolls next to the furniture
-    // (body width ~0.28x height, vs the chibi Kenney cast at ~1x). Scale them up
-    // 1.5x so their presence matches: standing height 2.28 — head well above the
-    // 0.75 desk top and the 1.65 monitor top, proportional to the mustard chairs
-    // and the beanbag. Seated leg angles are re-solved from the measured bone
-    // lengths in updateVRM, so the bigger scale does not push feet through the floor.
-    var VRM_H = CHAR_H * 1.5;
-    var charStyle = 'vroid';
+    // VRoid samples are slim real-proportioned figures: at a measured 1.52
+    // height they read as tiny dolls next to the furniture (body width
+    // ~0.28x height). Scale them up 1.5x so their presence matches:
+    // standing height 2.28 — head well above the 0.75 desk top and the
+    // 1.65 monitor top, proportional to the mustard chairs and the
+    // beanbag. Seated leg angles are re-solved from the measured bone
+    // lengths in updateVRM, so the bigger scale does not push feet
+    // through the floor.
+    var VRM_H = 2.28;
 
     function refreshVisibility(a){
-      var showV = charStyle === 'vroid' && !!a.vrmData;
-      // Kenney is both a selectable style and the standing fallback cast:
-      // it shows whenever Kenney is selected, and under VRoid for any
-      // agent whose VRM has not arrived yet (or failed to load), so an
-      // agent is never left without a body. There is no third cast.
-      var showK = !!a.kenney && (charStyle === 'kenney' || !showV);
-      if (a.kenney) a.kenney.root.visible = showK;
-      if (a.vrmData) a.vrmData.root.visible = showV;
-      a.tagY = showV ? 2.45 : 1.8; // name-tag anchor follows the taller VRoid cast
+      if (a.vrmData) a.vrmData.root.visible = true;
+      a.tagY = 2.45; // name-tag anchor for the VRoid cast
       // Startle-badge anchor: head CENTRE height (standing), how far the
       // head sinks when seated, and the sideways offset that parks the
       // badge right beside the head instead of above it.
-      a.headY0 = showV ? 2.04 : 1.26;
-      a.headDrop = showV ? 0.52 : 0.34;
-      a.headSide = showV ? 0.37 : 0.47;
-    }
-    function applyStyle(style){
-      charStyle = style;
-      agents.forEach(refreshVisibility);
+      a.headY0 = 2.04;
+      a.headDrop = 0.52;
+      a.headSide = 0.37;
+      // Hand-prop anchors (chest height standing / seated, how far in
+      // front the book and cup ride).
+      a.propK = 1.5;
+      if (a.bookProp) a.bookProp.scale.setScalar(1.35);
+      if (a.cupProp) a.cupProp.scale.setScalar(1.35);
+      a.bookY = [1.42, 0.95];
+      a.bookZ = 0.46;
+      a.cupPos = { x:0.36, y:1.34, ys:1.0, z:0.4 };
     }
     function normalizeHeight(obj, target){
       var bb = new THREE.Box3().setFromObject(obj);
@@ -1038,83 +1097,7 @@
       obj.position.set(-(bb.min.x + bb.max.x) / 2 * s, -bb.min.y * s, -(bb.min.z + bb.max.z) / 2 * s);
     }
 
-    /* ----- Kenney Mini Characters (CC0), loaded from assets/characters ----- */
-    var kenneyFailCount = 0;
-    function loadKenney(){
-      if (!THREE.GLTFLoader){ agents.forEach(refreshVisibility); return; }
-      var loader = new THREE.GLTFLoader();
-      agents.forEach(function(a){
-        loader.load(KENNEY_SRC[a.cfg.id], function(gltf){
-          var root = new THREE.Group();
-          var model = gltf.scene;
-          root.add(model);
-          normalizeHeight(model, CHAR_H);
-          model.traverse(function(o){ if (o.isMesh){ o.castShadow = true; o.frustumCulled = false; } });
-          a.group.add(root);
-          var mixer = new THREE.AnimationMixer(model);
-          var actions = {};
-          (gltf.animations || []).forEach(function(clip){ actions[clip.name] = mixer.clipAction(clip); });
-          // Sit calibration, measured from the GLB itself: the "sit" clip shifts the
-          // model root by -0.15 (native units) and the leg/pelvis pivot sits at
-          // 0.17625, so in the sit pose the pelvis rests at 0.02625 native units
-          // above the wrapper origin — multiplied by this model's normalize scale.
-          a.kenney = { root:root, model:model, mixer:mixer, actions:actions, current:null,
-            sitPelvis: 0.02625 * model.scale.x };
-          if (a.cfg.id === 'bima'){
-            loader.load(KENNEY_SRC.glasses, function(g2){
-              var head = model.getObjectByName('head');
-              if (!head) return;
-              var gm = g2.scene;
-              gm.traverse(function(o){ if (o.isMesh) o.castShadow = true; });
-              gm.position.set(0, 0.10, 0.085);
-              head.add(gm);
-            }, undefined, function(){});
-          }
-          refreshVisibility(a);
-        }, undefined, function(){
-          a.kenneyFailed = true; refreshVisibility(a);
-          kenneyFailCount++;
-          if (kenneyFailCount >= agents.length){
-            setNote('Berkas karakter Kenney gagal dimuat dari folder assets/characters — jalankan halaman ini lewat server statis/hosting agar folder assets terbaca (tidak bisa dari file://).');
-            log('Berkas Kenney tidak terbaca. Jalankan lewat server statis agar folder assets terbaca.');
-          }
-        });
-      });
-    }
-    function desiredKenneyClip(a){
-      if (a.celebrateT > 0 && !a.path.length) return 'emote-yes';
-      if (a._moving) return 'walk'; // actually striding — during the beanbag step-off slide a path exists but he is not walking yet
-      if (a.sit > 0.65) return 'sit';
-      return 'idle';
-    }
-    function updateKenney(a, dt, t){
-      var k = a.kenney; if (!k || !k.root.visible) return;
-      var name = desiredKenneyClip(a);
-      if (name !== k.current){
-        var next = k.actions[name];
-        if (next){
-          next.reset(); next.setLoop(THREE.LoopRepeat, Infinity); next.fadeIn(0.22); next.play();
-          var prev = k.actions[k.current]; if (prev) prev.fadeOut(0.22);
-          k.current = name;
-        }
-      }
-      k.mixer.update(dt);
-      var typing = (a.state === 'work' && a.sit > 0.7);
-      // Seat the pelvis ON the furniture: here seatY is the pelvis BOTTOM, so
-      // the beanbag target is the cushion top itself (0.60) and chairs/stools
-      // are 0.48 (the VRoid rig targets its hip joint ~0.12 higher instead).
-      // The sit clip alone drops the pelvis to ~0.06 above the floor, which
-      // buried the body inside the beanbag and inside the desk chairs.
-      // Blended continuously with the drop amount — a binary switch here
-      // popped the pelvis 0.12 in a single frame mid-sit, same sink bug
-      // as the VRoid rig had.
-      var bagK = Math.max(0, Math.min(1, (a.drop - 0.08) / 0.09));
-      var seatY = 0.48 + 0.12 * bagK;
-      k.root.position.y = (seatY - (k.sitPelvis || 0.06)) * a.sit + (typing ? Math.sin(t*9 + a.phase) * 0.012 : 0);
-      k.root.rotation.x = typing ? Math.sin(t*9 + a.phase) * 0.02 : 0;
-    }
-
-    /* ----- VRoid samples (VRM 0.0), lazy-loaded from assets/characters when selected -----
+    /* ----- VRoid samples (VRM 0.0), loaded from assets/characters at boot -----
        A .vrm file is a glTF binary, so it loads through GLTFLoader; the humanoid bones and
        face expressions are then driven procedurally (the samples ship no animation clips).
        @pixiv/three-vrm is not used at runtime: its modern releases need ES modules/import
@@ -1420,19 +1403,26 @@
       // desk workers lean in toward the screen a little; every so often the
       // head dips to glance at the keyboard, then returns to the monitor
       var lean = a.armAim;
-      poseBone(D, B.spine, (-0.10 - 0.10*lean)*sitF + br*0.5, 0, 0);
-      poseBone(D, B.chest, (-0.06 - 0.07*lean)*sitF + br, 0, 0);
+      // Idle-scene pose amounts (blended in animateAgent): sleeping at the
+      // desk slumps the whole upper body forward until the head rests on
+      // folded arms; reading raises the forearms to hold the book with the
+      // head bowed to it; coffee lifts the right forearm with the cup.
+      var slpF = (a.sleepAmt || 0) * sitF;
+      var rdF = a.readAmt || 0;
+      var cofF = a.coffeeAmt || 0;
+      poseBone(D, B.spine, (-0.10 - 0.10*lean)*sitF + br*0.5 - 0.50*slpF - 0.05*rdF*sitF, 0, 0);
+      poseBone(D, B.chest, (-0.06 - 0.07*lean)*sitF + br - 0.32*slpF - 0.03*rdF, 0, 0);
       // startle snap: while the cling reaction runs, the head jerks up and
       // back with a tiny fast tremble, then settles into the normal pose
       var stEnv = a.startleEnv || 0;
-      poseBone(D, B.head, -0.10*sitF + Math.sin(t*0.8 + a.phase)*0.03 + (a.glanceAmt || 0) * lean * 0.26 - stEnv*0.34,
-        Math.sin(t*0.45 + a.phase*2)*0.16*(1 - sitF*0.5) + (stEnv > 0 ? Math.sin(t*42 + a.phase)*0.07*stEnv : 0), stEnv*0.14);
-      var armDown = 1.22 - cf * 2.35;
-      var armFwd = 0.12 + 0.5*sitF;
+      poseBone(D, B.head, -0.10*sitF + Math.sin(t*0.8 + a.phase)*0.03*(1 - slpF) + (a.glanceAmt || 0) * lean * 0.26 - stEnv*0.34 + 0.58*slpF + 0.36*rdF + Math.sin(t*1.15 + a.phase)*0.025*slpF,
+        Math.sin(t*0.45 + a.phase*2)*0.16*(1 - sitF*0.5)*(1 - 0.85*slpF - 0.4*rdF) + (stEnv > 0 ? Math.sin(t*42 + a.phase)*0.07*stEnv : 0), stEnv*0.14 + slpF*0.18);
+      var armDown = (1.22 - cf * 2.35) * (1 - 0.38*rdF) - 0.10*slpF;
+      var armFwd = 0.12 + 0.5*sitF + 0.62*slpF + 0.34*rdF;
       poseBone(D, B.upperArmL, armFwd + (walking ? sw*0.4 : 0) + (typing ? Math.sin(t*10 + a.phase)*0.05 : 0), 0, armDown);
-      poseBone(D, B.upperArmR, armFwd + (walking ? -sw*0.4 : 0) + (typing ? Math.cos(t*11 + a.phase)*0.05 : 0), 0, -armDown);
-      poseBone(D, B.lowerArmL, 0.25 + 0.55*sitF + (typing ? Math.sin(t*12.3 + a.phase)*0.07 : 0), 0, 0.08 + cf*0.6);
-      poseBone(D, B.lowerArmR, 0.25 + 0.55*sitF + (typing ? Math.cos(t*10.7 + a.phase)*0.07 : 0), 0, -0.08 - cf*0.6);
+      poseBone(D, B.upperArmR, armFwd + (walking ? -sw*0.4 : 0) + (typing ? Math.cos(t*11 + a.phase)*0.05 : 0) + 0.22*cofF, 0, -armDown);
+      poseBone(D, B.lowerArmL, 0.25 + 0.55*sitF + (typing ? Math.sin(t*12.3 + a.phase)*0.07 : 0) + 0.30*slpF + 0.95*rdF, 0, 0.08 + cf*0.6 + 0.55*slpF + 0.28*rdF);
+      poseBone(D, B.lowerArmR, 0.25 + 0.55*sitF + (typing ? Math.cos(t*10.7 + a.phase)*0.07 : 0) + 0.30*slpF + 0.95*rdF + 0.60*cofF, 0, -0.08 - cf*0.6 - 0.55*slpF - 0.28*rdF);
       var hop = (cf > 0.03 && !walking) ? Math.abs(Math.sin(t*9)) * 0.07 * cf : 0;
       var sitDrop = Math.max(0, (D.hipsY || 0.76) - seatY) * sitF;
       D.root.position.y = -sitDrop + (walking ? Math.abs(Math.sin(a.phase))*0.03 : 0) + hop;
@@ -1486,8 +1476,6 @@
         D.blinkMorphs.forEach(function(m){ m.mesh.morphTargetInfluences[m.idx] = bl; });
       }
     }
-    loadKenney();
-
     /* ================= movement ================= */
     var TABLE_C = { x:0, z:0.8 };
     function detourPoint(from, to){
@@ -1545,27 +1533,127 @@
     function freeSpot(a){
       if (a.idleSpot){ a.idleSpot.taken = null; a.idleSpot = null; }
     }
-    function claimIdle(a){
-      freeSpot(a);
-      var options = [];
-      standSpots.forEach(function(s){ if(!s.taken) options.push({ spot:s, sit:false, drop:0 }); });
-      var pick = null;
-      if (Math.random() < 0.45 || !options.length){
-        pick = { spot:{ pos:a.home.pos, yaw:a.home.yaw, via:[] }, sit:true, homeDesk:true, drop:a.homeDrop };
-      } else {
-        pick = options[Math.floor(Math.random()*options.length)];
-        pick.drop = 0;
-        pick.spot.taken = a;
+    /* ================= idle scenes =================
+       When an agent has no task, it no longer just stands around or sits
+       at its desk: it picks a little scene, in rotation —
+         sleep  : desk agents doze off AT their desk, head down on folded
+                  arms, "Z Z Z" drifting beside the head (monitor asleep).
+         read   : walk to the bookshelf, take a book (prop appears), then
+                  read at a RANDOM spot — standing by the shelf, seated at
+                  their own desk, or seated at the meeting table.
+         coffee : walk to the coffee machine beside the water cooler,
+                  brew a cup (prop appears), then sit at the meeting
+                  table enjoying it.
+       Fajar (the beanbag agent) never idles on the bag anymore: his
+       repertoire is read-at-the-meeting-table (fixed spot) or coffee.
+       Any interruption (task, meeting) funnels through endScene, which
+       hides the props and releases the claimed meeting seat, so a scene
+       never leaks into work. */
+    var sceneSeq = 0;
+    var BREW_POS = new THREE.Vector3(-4.72, 0, 2.18); // standing point in front of the coffee machine
+    function endScene(a){
+      a.scene = null;
+      if (a.bookProp) a.bookProp.visible = false;
+      if (a.cupProp) a.cupProp.visible = false;
+      if (a.sceneSeat){ a.sceneSeat.taken = null; a.sceneSeat = null; }
+    }
+    function claimSeat(a){
+      for (var i = 0; i < meeting.seats.length; i++){
+        var s = meeting.seats[i];
+        if (!s.taken){ s.taken = a; a.sceneSeat = s; return s; }
       }
-      if (!pick.homeDesk) a.idleSpot = pick.spot;
-      return pick;
+      return null;
+    }
+    // Delayed scene step (the pause while fetching a book / brewing),
+    // guarded by the scene token: if the scene was interrupted meanwhile
+    // (task arrived, meeting called), the step silently does nothing.
+    function sceneAfter(a, ms, fn){
+      var sc = a.scene; if (!sc) return;
+      var tok = sc.token;
+      setTimeout(function(){ if (a.scene && a.scene.token === tok) fn(); }, ms);
+    }
+    function startSleep(a){
+      endScene(a); freeSpot(a);
+      a.scene = { kind:'sleep', token:++sceneSeq };
+      a.statusText = 'Menuju meja';
+      sendTo(a, a.home.pos, [], a.home.yaw, function(){
+        a.state = 'idle'; a.sitTarget = 1; a.dropTarget = a.homeDrop; a.statusText = 'Tidur di meja';
+      });
+    }
+    function startRead(a, fixedDest){
+      endScene(a);
+      var dest = fixedDest || ['stand', 'desk', 'meet'][Math.floor(Math.random()*3)];
+      var sc = a.scene = { kind:'read', token:++sceneSeq, phase:'fetch', dest:dest };
+      var shelf = standSpots[1]; // in front of the bookshelf
+      freeSpot(a);
+      if (!shelf.taken){ shelf.taken = a; a.idleSpot = shelf; }
+      a.statusText = 'Mengambil buku';
+      sendTo(a, shelf.pos, shelf.via, shelf.yaw, function(){
+        a.state = 'idle';
+        sceneAfter(a, 1100, function(){
+          if (a.bookProp) a.bookProp.visible = true; // book in hand
+          sc.phase = 'read';
+          goReadDest(a, sc);
+        });
+      });
+    }
+    function goReadDest(a, sc){
+      if (sc.dest === 'meet'){
+        var seat = claimSeat(a);
+        if (seat){
+          freeSpot(a);
+          a.statusText = 'Menuju meja rapat';
+          sendTo(a, seat.pos, seat.via, seat.yaw, function(){
+            a.state = 'idle'; a.sitTarget = 1; a.dropTarget = seat.drop; a.statusText = 'Membaca buku';
+          });
+          return;
+        }
+        sc.dest = a.cfg.beanbag ? 'stand' : 'desk'; // table full — fall back
+      }
+      if (sc.dest === 'desk'){
+        freeSpot(a);
+        a.statusText = 'Menuju mejanya';
+        sendTo(a, a.home.pos, [], a.home.yaw, function(){
+          a.state = 'idle'; a.sitTarget = 1; a.dropTarget = a.homeDrop; a.statusText = 'Membaca buku';
+        });
+      } else {
+        // read standing, right where the book was fetched (by the shelf)
+        a.state = 'idle'; a.sitTarget = 0; a.dropTarget = 0; a.statusText = 'Membaca buku';
+      }
+    }
+    function startCoffee(a){
+      endScene(a); freeSpot(a);
+      var seat = claimSeat(a);
+      if (!seat){ // no room at the meeting table — pick another scene
+        if (a.cfg.beanbag) startRead(a, 'meet'); else startSleep(a);
+        return;
+      }
+      var sc = a.scene = { kind:'coffee', token:++sceneSeq, phase:'brew' };
+      a.statusText = 'Membuat kopi';
+      sendTo(a, BREW_POS, [], -Math.PI/2, function(){
+        a.state = 'idle';
+        sceneAfter(a, 2300, function(){
+          if (a.cupProp) a.cupProp.visible = true; // fresh cup in hand
+          sc.phase = 'drink';
+          a.statusText = 'Menuju meja rapat';
+          sendTo(a, seat.pos, seat.via, seat.yaw, function(){
+            a.state = 'idle'; a.sitTarget = 1; a.dropTarget = seat.drop; a.statusText = 'Menikmati kopi';
+          });
+        });
+      });
     }
     function goIdle(a){
-      var pick = claimIdle(a);
-      a.statusText = pick.sit ? (pick.homeDesk ? (a.cfg.beanbag ? 'Santai di beanbag' : 'Santai di meja') : 'Santai') : 'Santai';
-      sendTo(a, pick.spot.pos, pick.spot.via, pick.spot.yaw, function(){
-        a.state = 'idle'; a.sitTarget = pick.sit ? 1 : 0; a.dropTarget = pick.drop || 0;
-      });
+      endScene(a);
+      if (a.cfg.beanbag){
+        // Fajar's beanbag is work-only now: idle time is reading at the
+        // meeting table, or the coffee run like everyone else.
+        if (Math.random() < 0.38) startCoffee(a); else startRead(a, 'meet');
+        return;
+      }
+      var r = Math.random();
+      if (r < 0.36) startSleep(a);
+      else if (r < 0.68) startRead(a);
+      else startCoffee(a);
     }
 
     /* ================= audio ================= */
@@ -1673,14 +1761,16 @@
       tasks.push(t); a.task = t;
       a.pendingIdle = false; a.celebrateT = 0;
       freeSpot(a);
+      endScene(a); // wake up / put the book & cup away before heading to work
       if (!silent){
         playCling();
         // Startle reaction on the exact event that plays the cling (manual
         // form, random button, demo auto-assign, queue dispatch — all of
-        // them funnel through here non-silent): a quick hop + squash-and-
-        // stretch, a fast head snap on the VRoid rig, and a "!" bubble for
-        // ~1 s. Timers are consumed in animateAgent / updateVRM.
-        a.startleT = 0.55; a.bangT = 1.0;
+        // them funnel through here non-silent): the CHARACTER leaps — a
+        // full-body jump with a landing squash (see animateAgent) — plus
+        // a fast head snap on the VRoid rig and the "!!" badge beside the
+        // head. Timers are consumed in animateAgent / updateVRM.
+        a.startleT = 0.7; a.bangT = 1.0;
       }
       log('Tugas baru untuk ' + a.cfg.name + ': ' + title);
       sendTo(a, a.home.pos, [], a.home.yaw, function(){ startWork(a, t); });
@@ -1694,7 +1784,7 @@
       playDone();
       log('Selesai: ' + t.title + ' (' + a.cfg.name + ')');
       renderTasks();
-      // brief celebration (Kenney "emote-yes" / VRoid joy / procedural hop), then back to idle
+      // brief celebration (VRoid joy face + hop), then back to idle
       a.celebrateT = 1.6; a.pendingIdle = true;
       a.sitTarget = 0; a.dropTarget = 0; a.statusText = 'Tugas selesai!';
       // Beanbag: the celebration rise doubles as the step-off — he slides
@@ -1717,6 +1807,8 @@
       log('Rapat dipanggil — semua agen ke ruang tengah.');
       var shuffled = meeting.seats.slice();
       agents.forEach(function(a, i){
+        endScene(a); // scenes end for the meeting FIRST: props away and any
+        // scene-claimed seat released, so seat picking below sees true occupancy
         var seat = shuffled[i % shuffled.length];
         if (seat.taken && seat.taken !== a){ seat = shuffled.find(function(s){ return !s.taken; }) || seat; }
         seat.taken = a; a.meetSeat = seat;
@@ -1829,65 +1921,56 @@
       log('Demo otomatis ' + (demoOn ? 'diaktifkan' : 'dimatikan') + '.');
     });
 
-    /* character style dropdown */
-    var styleSel = document.getElementById('styleSel');
-    var styleNote = document.getElementById('styleNote');
-    var lastStyle = 'kenney', vrmSession = 0;
-    function setNote(msg){
-      if (!msg){ styleNote.hidden = true; styleNote.textContent = ''; }
-      else { styleNote.hidden = false; styleNote.textContent = msg; }
+    /* VRoid model loading (the only cast). Models load sequentially, not
+       in parallel: five concurrent glTF parses of ±15 MB files saturate
+       the main thread for a long stretch on modest hardware. One at a
+       time keeps the office rendering between models, and each agent
+       swaps in the moment its own model has arrived — there is no
+       stand-in figure meanwhile. If a file fails outright, the panel
+       shows which agent is affected and offers a retry for just the
+       missing models; no other style is ever substituted. */
+    var modelStatus = document.getElementById('modelStatus');
+    var btnRetryVrm = document.getElementById('btnRetryVrm');
+    var vrmLoading = false;
+    function setModelStatus(msg){
+      if (!msg){ modelStatus.hidden = true; modelStatus.textContent = ''; }
+      else { modelStatus.hidden = false; modelStatus.textContent = msg; }
     }
-    function styleLabel(v){ return v === 'kenney' ? 'Kenney' : 'VRoid'; }
-    styleSel.addEventListener('change', function(){
-      var v = styleSel.value;
-      if (v !== 'vroid'){
-        lastStyle = v; applyStyle(v); setNote('');
-        log('Gaya karakter diganti: ' + styleLabel(v) + '.');
-        return;
-      }
-      var session = ++vrmSession;
-      setNote('Memuat model VRoid… berkas besar (±15 MB per model) dari folder assets lokal.');
+    function loadAllVRM(){
+      if (vrmLoading) return;
+      var missing = agents.filter(function(a){ return !a.vrmData; });
+      if (!missing.length){ setModelStatus(''); btnRetryVrm.hidden = true; return; }
+      vrmLoading = true;
+      btnRetryVrm.hidden = true;
+      setModelStatus('Memuat model VRoid… (0/' + missing.length + ' agen)');
       log('Memuat model VRoid…');
-      // Load sequentially, not in parallel: five concurrent glTF parses of
-      // ±15 MB files saturate the main thread for a long stretch on modest
-      // hardware (this is now the default style, so it runs on first load).
-      // One at a time keeps the office rendering between models; the end
-      // state — cast swapped in once every model has arrived — is unchanged.
-      var chain = Promise.resolve(), results = [];
-      agents.forEach(function(a){
+      var chain = Promise.resolve(), done = 0, failed = [];
+      missing.forEach(function(a){
         chain = chain.then(function(){
-          return (a.vrmData ? Promise.resolve(true) : loadOneVRM(a)).then(function(r){ results.push(r); });
+          return loadOneVRM(a).then(function(ok){
+            done++;
+            if (!ok) failed.push(a.cfg.name);
+            setModelStatus('Memuat model VRoid… (' + done + '/' + missing.length + ' agen)');
+          });
         });
       });
-      chain.then(function(){ return results; }).then(function(results){
-        if (session !== vrmSession || styleSel.value !== 'vroid') return;
-        var okCount = 0;
-        results.forEach(function(r){ if (r) okCount++; });
-        if (okCount === 0){
-          styleSel.value = lastStyle; applyStyle(lastStyle);
-          setNote('Gagal memuat berkas VRoid dari folder assets/characters — jalankan halaman ini lewat server statis/hosting agar folder assets terbaca (tidak bisa dari file://). Tetap memakai gaya ' + styleLabel(lastStyle) + '.');
-          log('Model VRoid gagal dimuat — tetap di gaya ' + styleLabel(lastStyle) + '.');
+      chain.then(function(){
+        vrmLoading = false;
+        if (!failed.length){
+          setModelStatus('');
+          btnRetryVrm.hidden = true;
+          log('Model VRoid aktif: contoh resmi VRoid AvatarSample (A/B/C) dari folder assets/characters.');
         } else {
-          lastStyle = 'vroid'; applyStyle('vroid');
-          setNote(okCount === agents.length
-            ? 'Model VRoid aktif: contoh resmi VRoid AvatarSample (A/B/C) dari folder assets/characters.'
-            : 'Model VRoid aktif sebagian (' + okCount + '/' + agents.length + ' agen) — agen lain tampil sebagai Kenney.');
-          log('Gaya karakter diganti: VRoid.');
+          setModelStatus('Model VRoid untuk ' + failed.join(', ') + ' gagal dimuat dari folder assets/characters — jalankan halaman ini lewat server statis/hosting agar folder assets terbaca (tidak bisa dari file://), lalu coba lagi.');
+          btnRetryVrm.hidden = false;
+          log('Model VRoid gagal dimuat untuk: ' + failed.join(', ') + '.');
         }
       });
-    });
-    // VRoid is the default style: on first load, run the exact same
-    // lazy-load path a manual dropdown change uses — the "Memuat model
-    // VRoid…" note shows until the models arrive, the panel/UI render
-    // immediately, and the cast swaps in once loading finishes. If the
-    // load fails, the handler above falls back to Kenney as before.
-    if (styleSel.value === 'vroid'){
-      // deferred a beat so the office paints its first frame (with the
-      // loading note) before the first model parse starts
-      window.setTimeout(function(){
-        if (styleSel.value === 'vroid') styleSel.dispatchEvent(new Event('change'));
-      }, 120);
     }
+    btnRetryVrm.addEventListener('click', function(){ loadAllVRM(); });
+    // Deferred a beat so the office paints its first frame (with the
+    // loading status) before the first model parse starts.
+    window.setTimeout(loadAllVRM, 120);
 
     /* ================= day / night cycle ================= */
     var cycle = { p: 0.30, len: 76, df: 1, lastDraw: -1 };
@@ -1940,20 +2023,30 @@
     (function initAgents(){
       var sinta = agents[0];
       sinta.group.position.copy(sinta.home.pos); sinta.yaw = sinta.targetYaw = Math.PI;
-      sinta.state = 'idle'; sinta.sitTarget = 1; sinta.sit = 1; sinta.statusText = 'Santai di meja';
+      sinta.state = 'idle'; sinta.sitTarget = 1; sinta.sit = 1; sinta.statusText = 'Tidur di meja';
+      sinta.scene = { kind:'sleep', token:0 };
       var bima = agents[2];
       bima.group.position.copy(bima.home.pos); bima.yaw = bima.targetYaw = Math.PI;
-      bima.state = 'idle'; bima.sitTarget = 1; bima.sit = 1; bima.statusText = 'Santai di meja';
+      bima.state = 'idle'; bima.sitTarget = 1; bima.sit = 1; bima.statusText = 'Tidur di meja';
+      bima.scene = { kind:'sleep', token:0 };
       var dewi = agents[3];
       var wp = standSpots[0]; wp.taken = dewi; dewi.idleSpot = wp;
       dewi.group.position.copy(wp.pos); dewi.yaw = dewi.targetYaw = wp.yaw; dewi.statusText = 'Menikmati pemandangan';
       var fajar = agents[4];
-      fajar.group.position.copy(fajar.home.pos); fajar.yaw = fajar.targetYaw = fajar.home.yaw;
-      fajar.state = 'idle'; fajar.sitTarget = 1; fajar.sit = 1; fajar.drop = fajar.dropTarget = fajar.homeDrop;
-      fajar.statusText = 'Santai di beanbag';
+      // Fajar's idle time is no longer spent on the beanbag: he opens the
+      // day already reading at the meeting table (the bag stays empty,
+      // its laptop closed on the cushion — see updateBagLaptop) and only
+      // returns to the bag when a task sends him there.
+      var fseat = meeting.seats[1]; fseat.taken = fajar; fajar.sceneSeat = fseat;
+      fajar.group.position.copy(fseat.pos); fajar.yaw = fajar.targetYaw = fseat.yaw;
+      fajar.state = 'idle'; fajar.sitTarget = 1; fajar.sit = 1; fajar.drop = fajar.dropTarget = fseat.drop;
+      fajar.scene = { kind:'read', token:0, phase:'read', dest:'meet' };
+      if (fajar.bookProp) fajar.bookProp.visible = true;
+      fajar.statusText = 'Membaca buku';
       var nadia = agents[1];
       nadia.group.position.copy(nadia.home.pos); nadia.yaw = nadia.targetYaw = Math.PI;
-      nadia.state = 'idle'; nadia.sitTarget = 1; nadia.sit = 1; nadia.statusText = 'Santai di meja';
+      nadia.state = 'idle'; nadia.sitTarget = 1; nadia.sit = 1; nadia.statusText = 'Tidur di meja';
+      nadia.scene = { kind:'sleep', token:0 };
       log('Kantor dibuka — tim mulai berdatangan.');
       setTimeout(function(){ assignTask('Brief & prioritas kerja hari ini', 'sinta', true); }, 1500);
       setTimeout(function(){ if (demoOn) assignTask('Riset pergerakan harga BBCA minggu ini', 'fajar', true); }, 6000);
@@ -2010,7 +2103,7 @@
       // same real time even in a slow or throttled tab.
       if (a.startleT > 0) a.startleT = Math.max(0, a.startleT - dtW);
       if (a.bangT > 0) a.bangT = Math.max(0, a.bangT - dtW);
-      var stProg = a.startleT > 0 ? 1 - a.startleT/0.55 : 1;
+      var stProg = a.startleT > 0 ? 1 - a.startleT/0.7 : 1;
       a.startleEnv = a.startleT > 0 ? Math.sin(stProg * Math.PI) : 0;
       // Beanbag step-off / step-on slides (Fajar only), driven by the sit
       // amount itself so position and pose can never disagree:
@@ -2058,14 +2151,26 @@
       // Safety net: no agent may ever stand or walk outside the floor slab.
       p.x = Math.max(-FW/2 + 0.45, Math.min(FW/2 - 0.45, p.x));
       p.z = Math.max(-FD/2 + 0.45, Math.min(FD/2 - 0.45, p.z));
-      // Startle hop + squash-and-stretch on the whole figure group. Because
-      // both casts ride inside this group, the same hop serves as the Kenney
-      // equivalent, and for Fajar it reads as a small bounce on the beanbag,
-      // timed with his laptop scene opening as he heads back to the bag.
+      // Startle JUMP on the whole figure group — deliberately big and
+      // readable (the old 0.085 squash-hop was invisible in practice):
+      // a fast launch to a ~0.32 peak (a clearly readable lift for the
+      // 2.28-tall VRoid cast), a short hang at the top, a fast
+      // drop, then a landing squash that settles. It is a pure vertical
+      // offset on the group root, so it stacks on ANY current pose: a
+      // seated agent leaps in their chair, a sleeping agent jolts upright
+      // off the desk, a standing/walking agent jumps in place.
       if (a.startleT > 0 && !REDUCED){
-        a.group.position.y = a.startleEnv * 0.085;
-        var sq = Math.sin(stProg * Math.PI * 2) * 0.055;
-        a.group.scale.set(1 - sq*0.6, 1 + sq, 1 - sq*0.6);
+        var jp = stProg, air;
+        if (jp < 0.28){ var ju = jp/0.28; air = 1 - (1-ju)*(1-ju); }
+        else if (jp < 0.45) air = 1 - (jp - 0.28)/0.17 * 0.08;
+        else if (jp < 0.68){ var ju2 = (jp - 0.45)/0.23; air = 0.92 * (1 - ju2*ju2); }
+        else air = 0;
+        a.group.position.y = air * 0.32;
+        var land = jp >= 0.68 ? Math.sin(Math.min(1, (jp - 0.68)/0.32) * Math.PI) : 0;
+        var anti = jp < 0.14 ? Math.sin(jp/0.14 * Math.PI) : 0;
+        a.group.scale.set(1 - air*0.03 + land*0.09 + anti*0.04,
+                          1 + air*0.05 - land*0.13 - anti*0.05,
+                          1 - air*0.03 + land*0.09 + anti*0.04);
       } else if (a.group.position.y !== 0){
         a.group.position.y = 0; a.group.scale.set(1, 1, 1);
       }
@@ -2073,6 +2178,27 @@
       a.group.rotation.y = a.yaw;
       a.sit += (a.sitTarget - a.sit) * Math.min(1, dt*5);
       a.drop += (a.dropTarget - a.drop) * Math.min(1, dt*5);
+      // Idle-scene pose amounts (consumed by updateVRM):
+      // sleep rises slowly as the agent dozes off but snaps off fast when
+      // woken; read/coffee blend in once the agent is settled in place.
+      var slpTgt = (a.scene && a.scene.kind === 'sleep' && a.state === 'idle' && !a.path.length && a.sit > 0.6) ? 1 : 0;
+      var slpRate = slpTgt > (a.sleepAmt || 0) ? 1.7 : 5.5;
+      a.sleepAmt = (a.sleepAmt || 0) + (slpTgt - (a.sleepAmt || 0)) * Math.min(1, dtW * slpRate);
+      var rdTgt = (a.scene && a.scene.kind === 'read' && a.scene.phase === 'read' && !a.path.length) ? 1 : 0;
+      a.readAmt = (a.readAmt || 0) + (rdTgt - (a.readAmt || 0)) * Math.min(1, dtW * 3);
+      var cofTgt = (a.scene && a.scene.kind === 'coffee' && a.scene.phase === 'drink' && !a.path.length && a.sit > 0.6) ? 1 : 0;
+      a.coffeeAmt = (a.coffeeAmt || 0) + (cofTgt - (a.coffeeAmt || 0)) * Math.min(1, dtW * 3);
+      // Hand props ride at chest height (lower when seated), tilted up
+      // toward the reader; anchors per cast set in refreshVisibility.
+      if (a.bookProp && a.bookProp.visible){
+        var bkY = a.bookY || [0.92, 0.76];
+        a.bookProp.position.set(0, bkY[0] + (bkY[1] - bkY[0]) * a.sit, a.bookZ || 0.31);
+        a.bookProp.rotation.x = -0.52;
+      }
+      if (a.cupProp && a.cupProp.visible){
+        var cpP = a.cupPos || { x:0.24, y:0.97, ys:0.82, z:0.27 };
+        a.cupProp.position.set(cpP.x, cpP.y + (cpP.ys - cpP.y) * a.sit, cpP.z);
+      }
       var sit = a.sit;
       a.hips.position.y = 0.31 - sit*0.02 - a.drop;
       // Beanbag (drop ≈ 0.17): the procedural body is built around a low hip,
@@ -2179,6 +2305,27 @@
           a.bang.style.transform = 'translate(' + bx.toFixed(1) + 'px,' + by.toFixed(1) + 'px) translate(-50%,-50%) scale(' + bs.toFixed(2) + ')';
         } else if (a.bang.style.display !== 'none') a.bang.style.display = 'none';
       }
+      // "Z Z Z" glyph beside the head while the agent sleeps at their
+      // desk — same head-side anchor family as the "!!" badge, parked a
+      // little higher because the CSS letters themselves drift upward.
+      // Shown only while the sleep scene is live and fully dozed, so the
+      // letters vanish the instant a task wakes the agent.
+      if (a.zzz){
+        var showZ = vis && a.sleepAmt > 0.45 && a.scene && a.scene.kind === 'sleep';
+        if (showZ){
+          var hdDropZ = (a.headDrop || 0.45) - (a.drop > 0.12 ? 0.2 : 0);
+          var headYZ = (a.headY0 || 1.9) - a.sit * hdDropZ - (a.sleepAmt || 0) * 0.30 + p.y;
+          var camElZ = camera.matrixWorld.elements;
+          var sideZ = (a.headSide || 0.4) + 0.08;
+          projV.set(p.x + camElZ[0] * sideZ, headYZ + 0.34, p.z + camElZ[2] * sideZ).project(camera);
+          var zx = (projV.x*0.5 + 0.5) * stage.clientWidth;
+          var zy = (-projV.y*0.5 + 0.5) * stage.clientHeight;
+          zx = Math.max(34, Math.min(stage.clientWidth - 34, zx));
+          zy = Math.max(40, Math.min(stage.clientHeight - 30, zy));
+          a.zzz.style.display = 'block';
+          a.zzz.style.transform = 'translate(' + zx.toFixed(1) + 'px,' + zy.toFixed(1) + 'px) translate(-38%,-88%)';
+        } else if (a.zzz.style.display !== 'none') a.zzz.style.display = 'none';
+      }
       var dotColor = a.state === 'work' ? '#57e6b8' : (a.state === 'meeting' ? '#7cc4ff' : (a.path.length ? '#ffc94d' : '#8be0a4'));
       a.tagDot.style.background = dotColor;
       a.rosterStatus.textContent = a.task ? ('Bekerja · ' + Math.round(a.task.progress) + '%') : a.statusText;
@@ -2233,7 +2380,6 @@
       updateScreens(dt, t);
       agents.forEach(function(a, i){
         animateAgent(a, dt, t, dtW);
-        updateKenney(a, dt, t);
         updateVRM(a, dt, t);
       });
       if (demoOn && !meetingActive){
