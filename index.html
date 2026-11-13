@@ -209,7 +209,6 @@
             <select id="styleSel">
               <option value="kenney">Kenney — Mini Characters (CC0)</option>
               <option value="vroid" selected>VRoid — AvatarSample (berkas lokal)</option>
-              <option value="kode">Kode — Chibi prosedural</option>
             </select>
             <p id="styleNote" class="stylestatus" hidden></p>
           </div>
@@ -906,7 +905,7 @@
       { pos:new THREE.Vector3(-2.7, 0, 2.7), yaw:0.8, taken:null, via:[] }            // chatting by the rug
     ];
 
-    /* ---------- chibi characters ---------- */
+    /* ---------- agents ---------- */
     var AGENTS = [
       { id:'sinta', name:'Sinta', role:'Riset & Data',  shirt:0xef6f6c, skin:0xffd9b3, hair:0x3a2415, hairStyle:'long',  deskHue:'#ef6f6c' },
       { id:'nadia', name:'Nadia', role:'Operasional',   shirt:0x7d5ba6, skin:0xffdcbb, hair:0x241611, hairStyle:'long',  deskHue:'#7d5ba6' },
@@ -920,78 +919,29 @@
       var grp = new THREE.Group();
       var proc = new THREE.Group(); grp.add(proc);
       var hips = new THREE.Group(); hips.position.y = 0.31; proc.add(hips);
-      // tiny torso — the head does the talking
-      var torso = new THREE.Mesh(new THREE.CapsuleGeometry(0.185, 0.10, 6, 16), mat(cfg.shirt, 0.85));
-      torso.position.y = 0.13; torso.castShadow = true; hips.add(torso);
-      var hem = cyl(0.19, 0.205, 0.07, cfg.shirt, 16, 0.85); hem.position.y = -0.02; hips.add(hem);
-      // HUGE round chibi head (~60% of total height)
+      // No procedural body is built here anymore: the visible figure is
+      // always a loaded model (VRoid by default, Kenney as the alternative
+      // style and standing fallback). These pivots carry no meshes —
+      // animateAgent still poses them every frame, and the work-cycle
+      // timers computed alongside them (typing <-> mouse, glances) also
+      // drive the VRoid rig, so the pivots stay but no chibi mesh exists.
       var headG = new THREE.Group(); headG.position.y = 0.36; hips.add(headG);
-      var head = sph(0.44, cfg.skin, 0.55); head.position.y = 0.20; head.scale.set(1, 1.02, 0.97); headG.add(head);
-      var eyeMat = mat(0x2b2118, 0.35);
-      [-0.145, 0.145].forEach(function(ex){
-        var eye = new THREE.Mesh(new THREE.SphereGeometry(0.054, 12, 12), eyeMat);
-        eye.position.set(ex, 0.23, 0.41); eye.scale.set(0.9, 1.25, 0.6); headG.add(eye);
-        var hl = new THREE.Mesh(new THREE.SphereGeometry(0.019, 8, 8), new THREE.MeshBasicMaterial({ color:0xffffff }));
-        hl.position.set(ex + 0.017, 0.258, 0.433); headG.add(hl);
-      });
-      var smile = new THREE.Mesh(new THREE.TorusGeometry(0.072, 0.015, 8, 16, Math.PI), eyeMat);
-      smile.position.set(0, 0.10, 0.415); smile.rotation.x = 0.2; smile.rotation.z = Math.PI; headG.add(smile);
-      [-0.26, 0.26].forEach(function(bx){
-        var blush = new THREE.Mesh(new THREE.CircleGeometry(0.065, 12),
-          new THREE.MeshBasicMaterial({ color:0xf2a18e, transparent:true, opacity:0.55 }));
-        blush.position.set(bx, 0.17, 0.355); blush.rotation.x = -0.15; blush.rotation.y = bx > 0 ? 0.35 : -0.35; headG.add(blush);
-      });
-      // hair
-      if (cfg.hairStyle === 'long'){
-        var hairTop = sph(0.465, cfg.hair, 0.9); hairTop.position.set(0, 0.33, -0.05); hairTop.scale.set(1, 0.85, 1); headG.add(hairTop);
-        var fringe = sph(0.45, cfg.hair, 0.9); fringe.position.set(0, 0.40, 0.10); fringe.scale.set(0.97, 0.66, 0.92); headG.add(fringe);
-        var hairBack = new THREE.Mesh(new THREE.CapsuleGeometry(0.37, 0.42, 6, 14), mat(cfg.hair, 0.9));
-        hairBack.position.set(0, -0.10, -0.21); hairBack.castShadow = true; headG.add(hairBack);
-        [-1, 1].forEach(function(sd){
-          var strand = new THREE.Mesh(new THREE.CapsuleGeometry(0.105, 0.32, 6, 10), mat(cfg.hair, 0.9));
-          strand.position.set(0.39*sd, -0.02, 0.02); strand.castShadow = true; headG.add(strand);
-        });
-      } else {
-        var hs = sph(0.465, cfg.hair, 0.9); hs.position.set(0, 0.34, -0.03); hs.scale.set(1, 0.84, 1); headG.add(hs);
-        var tuft = sph(0.31, cfg.hair, 0.9); tuft.position.set(0.04, 0.45, 0.14); tuft.scale.set(1, 0.55, 0.85); headG.add(tuft);
-      }
-      // glasses (Bima)
-      if (cfg.glasses){
-        var gMat = mat(0x22303e, 0.35, 0.4);
-        [-0.145, 0.145].forEach(function(gx){
-          var lens = new THREE.Mesh(new THREE.TorusGeometry(0.112, 0.017, 8, 24), gMat);
-          lens.position.set(gx, 0.235, 0.42); headG.add(lens);
-          var temple = new THREE.Mesh(new THREE.BoxGeometry(0.016, 0.016, 0.3), gMat);
-          temple.position.set(gx*2.85, 0.25, 0.15); headG.add(temple);
-        });
-        var bridge = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.016, 0.016), gMat);
-        bridge.position.set(0, 0.25, 0.425); headG.add(bridge);
-      }
       // short arms
       function makeArm(side){
         var pivot = new THREE.Group(); pivot.position.set(0.20*side, 0.27, 0); hips.add(pivot);
-        var arm = new THREE.Mesh(new THREE.CapsuleGeometry(0.062, 0.11, 6, 12), mat(cfg.shirt, 0.85));
-        arm.position.y = -0.11; arm.castShadow = true; pivot.add(arm);
-        var hand = sph(0.058, cfg.skin, 0.55); hand.position.y = -0.235; pivot.add(hand);
         return pivot;
       }
       var armL = makeArm(-1), armR = makeArm(1);
       // short legs
       function makeLeg(side){
         var thighP = new THREE.Group(); thighP.position.set(0.10*side, 0.31, 0); proc.add(thighP);
-        var thigh = new THREE.Mesh(new THREE.CapsuleGeometry(0.092, 0.07, 6, 12), mat(0x46536a, 0.85));
-        thigh.position.y = -0.07; thigh.castShadow = true; thighP.add(thigh);
         var kneeP = new THREE.Group(); kneeP.position.y = -0.15; thighP.add(kneeP);
-        var shin = new THREE.Mesh(new THREE.CapsuleGeometry(0.072, 0.06, 6, 12), mat(0x46536a, 0.85));
-        shin.position.y = -0.06; shin.castShadow = true; kneeP.add(shin);
-        var shoe = rbox(0.135, 0.075, 0.24, 0xf3efe6, 0.5); shoe.position.set(0, -0.135, 0.04); kneeP.add(shoe);
         return { thigh:thighP, knee:kneeP };
       }
       var legL = makeLeg(-1), legR = makeLeg(1);
       var ring = new THREE.Mesh(new THREE.RingGeometry(0.52, 0.64, 36),
         new THREE.MeshBasicMaterial({ color:0xffc94d, transparent:true, opacity:0, side:THREE.DoubleSide }));
-      ring.rotation.x = -Math.PI/2; ring.position.y = 0.03; proc.add(ring);
-      proc.scale.setScalar(1.12);
+      ring.rotation.x = -Math.PI/2; ring.position.y = 0.03; grp.add(ring);
       scene.add(grp);
       return { cfg:cfg, group:grp, proc:proc, hips:hips, head:headG, armL:armL, armR:armR,
         legL:legL, legR:legR, ring:ring,
@@ -1031,7 +981,7 @@
       a.tagDot = el.querySelector('.dot');
     });
 
-    /* ================= character styles: Kenney / VRoid / Kode ================= */
+    /* ================= character styles: VRoid (default) / Kenney ================= */
     var KENNEY_SRC = {
       sinta:'assets/characters/character-female-a.glb', dewi:'assets/characters/character-female-b.glb', nadia:'assets/characters/character-female-c.glb',
       bima:'assets/characters/character-male-a.glb', fajar:'assets/characters/character-male-b.glb', glasses:'assets/characters/aid-glasses.glb'
@@ -1055,11 +1005,14 @@
     var charStyle = 'vroid';
 
     function refreshVisibility(a){
-      var showK = charStyle === 'kenney' && !!a.kenney;
       var showV = charStyle === 'vroid' && !!a.vrmData;
+      // Kenney is both a selectable style and the standing fallback cast:
+      // it shows whenever Kenney is selected, and under VRoid for any
+      // agent whose VRM has not arrived yet (or failed to load), so an
+      // agent is never left without a body. There is no third cast.
+      var showK = !!a.kenney && (charStyle === 'kenney' || !showV);
       if (a.kenney) a.kenney.root.visible = showK;
       if (a.vrmData) a.vrmData.root.visible = showV;
-      a.proc.visible = !showK && !showV;
       a.tagY = showV ? 2.45 : 1.8; // name-tag anchor follows the taller VRoid cast
     }
     function applyStyle(style){
@@ -1111,8 +1064,8 @@
           a.kenneyFailed = true; refreshVisibility(a);
           kenneyFailCount++;
           if (kenneyFailCount >= agents.length){
-            setNote('Berkas karakter Kenney gagal dimuat dari folder assets/characters — jalankan halaman ini lewat server statis/hosting agar folder assets terbaca (tidak bisa dari file://). Sementara agen tampil sebagai chibi prosedural.');
-            log('Berkas Kenney tidak terbaca — memakai karakter prosedural. Jalankan lewat server statis agar folder assets terbaca.');
+            setNote('Berkas karakter Kenney gagal dimuat dari folder assets/characters — jalankan halaman ini lewat server statis/hosting agar folder assets terbaca (tidak bisa dari file://).');
+            log('Berkas Kenney tidak terbaca. Jalankan lewat server statis agar folder assets terbaca.');
           }
         });
       });
@@ -1810,7 +1763,7 @@
       if (!msg){ styleNote.hidden = true; styleNote.textContent = ''; }
       else { styleNote.hidden = false; styleNote.textContent = msg; }
     }
-    function styleLabel(v){ return v === 'kenney' ? 'Kenney' : (v === 'vroid' ? 'VRoid' : 'Kode'); }
+    function styleLabel(v){ return v === 'kenney' ? 'Kenney' : 'VRoid'; }
     styleSel.addEventListener('change', function(){
       var v = styleSel.value;
       if (v !== 'vroid'){
@@ -1845,7 +1798,7 @@
           lastStyle = 'vroid'; applyStyle('vroid');
           setNote(okCount === agents.length
             ? 'Model VRoid aktif: contoh resmi VRoid AvatarSample (A/B/C) dari folder assets/characters.'
-            : 'Model VRoid aktif sebagian (' + okCount + '/' + agents.length + ' agen) — agen lain tetap tampil prosedural.');
+            : 'Model VRoid aktif sebagian (' + okCount + '/' + agents.length + ' agen) — agen lain tampil sebagai Kenney.');
           log('Gaya karakter diganti: VRoid.');
         }
       });
