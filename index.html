@@ -996,7 +996,7 @@
       return { cfg:cfg, group:grp, proc:proc, hips:hips, head:headG, armL:armL, armR:armR,
         legL:legL, legR:legR, ring:ring,
         celebrateT:0, pendingIdle:false, celebF:0,
-        cyc:{ phase:'type', t:1.5 + Math.random()*2.5, mouseAmt:0, clickT:0.8 + Math.random(),
+        cyc:{ phase:'type', t:3 + Math.random()*4, mouseAmt:0, clickT:0.8 + Math.random(),
               glanceT:2 + Math.random()*3, seed:Math.random()*20 }, glanceAmt:0, armAim:0,
         state:'idle', path:[], speed:2.2, yaw:0, targetYaw:0, sit:0, sitTarget:0, drop:0, dropTarget:0,
         phase:Math.random()*6.28, task:null, spot:null, idleSpot:null, statusText:'Santai',
@@ -1195,6 +1195,23 @@
       Object.keys(D.bones).forEach(function(key){
         var b = D.bones[key]; if (b) D.rest[b.uuid] = b.quaternion.clone();
       });
+      // Finger joints (proximal + middle phalanges, both hands). The sample
+      // models' rest hands are flat open palms; while the desk-work pose is
+      // active updateVRM curls these gently so the hand reads as resting on
+      // the keyboard / cupped over the mouse instead of a splayed hand
+      // stretched out toward the screen.
+      D.fingers = [];
+      ['L', 'R'].forEach(function(sd){
+        ['Thumb', 'Index', 'Middle', 'Ring', 'Little'].forEach(function(fg){
+          [1, 2].forEach(function(seg){
+            var fb = model.getObjectByName('J_Bip_' + sd + '_' + fg + seg);
+            if (fb){
+              D.rest[fb.uuid] = fb.quaternion.clone();
+              D.fingers.push({ b:fb, side:sd, seg:seg, thumb:(fg === 'Thumb') });
+            }
+          });
+        });
+      });
       if (D.bones.hips){
         model.updateMatrixWorld(true);
         var hipWp = new THREE.Vector3();
@@ -1318,20 +1335,36 @@
     function aimArms(a, D, t){
       a.group.updateMatrixWorld(true);
       var cyc = a.cyc, mA = cyc.mouseAmt;
-      // wrist targets in agent-group space: the desk keyboard sits 0.75–0.97
-      // ahead of the chair position, its centre at x -0.05; the mouse pad is
-      // at x -0.55 (the agent's right). Typing taps alternate left/right and
-      // fade as the right hand slides over to the mouse.
-      var tapL = Math.abs(Math.sin(t*12.5 + cyc.seed*7)) * 0.016 * (1 - mA);
-      var tapR = Math.abs(Math.sin(t*12.5 + cyc.seed*7 + Math.PI)) * 0.016 * (1 - mA);
-      var wL = new THREE.Vector3(0.065, 0.865 + tapL, 0.79);
-      var wR = new THREE.Vector3(-0.165, 0.865 + tapR, 0.79);
+      // Wrist targets in agent-group space (the group sits at the chair,
+      // facing the desk; local +Z is toward the desk, local -X is the
+      // agent's right after the PI yaw), derived from the ACTUAL desk
+      // meshes in makeDesk, converted chair-relative:
+      //   keyboard mesh: desk-local centre (0.05, 0.82, 0.16), size
+      //     0.62 x 0.035 x 0.22 -> top surface y = 0.8375, centre lands at
+      //     local (-0.05, 0.86), spanning x [-0.36, 0.26], z [0.75, 0.97].
+      //   mouse mesh: desk-local centre (0.58, 0.834, 0.17), size
+      //     0.115 x 0.05 x 0.185 -> top y = 0.859, centre local (-0.58, 0.85).
+      // The IK aims the WRIST joint, but contact is made by the PALM, which
+      // rides ~0.10 past the wrist along the forearm and ~0.04 below it.
+      // So each wrist target sits 0.10 BEHIND its contact patch and 0.04
+      // ABOVE the surface: palm centred on the keys / on the mouse body,
+      // fingertips ending at z ~0.94 — still on the keyboard, never past
+      // it toward the monitor (the old targets put the wrist itself on
+      // the patch, so the whole hand overshot a hand-length beyond it).
+      // Combined with the seated forward slide in updateVRM, both targets
+      // are now inside the arm's measured reach (~0.64 needed vs ~0.80
+      // available), so the elbow keeps a natural bend and the hand truly
+      // rests on the surface instead of reaching into the air.
+      var tapL = Math.abs(Math.sin(t*11 + cyc.seed*7)) * 0.042 * (1 - mA);
+      var tapR = Math.abs(Math.sin(t*11 + cyc.seed*7 + Math.PI)) * 0.042 * (1 - mA);
+      var wL = new THREE.Vector3(0.09, 0.878 + tapL, 0.76);
+      var wR = new THREE.Vector3(-0.17, 0.878 + tapR, 0.76);
       if (mA > 0.001){
-        var clickDip = (cyc.phase === 'mouse' && cyc.clickT < 0.12) ? Math.sin(cyc.clickT / 0.12 * Math.PI) * 0.02 : 0;
+        var clickDip = (cyc.phase === 'mouse' && cyc.clickT < 0.12) ? Math.sin(cyc.clickT / 0.12 * Math.PI) * 0.026 : 0;
         var mouseR = new THREE.Vector3(
-          -0.55 + Math.sin(t*1.7 + cyc.seed*3) * 0.028,
-          0.868 - clickDip,
-          0.845 + Math.cos(t*1.3 + cyc.seed*5) * 0.030);
+          -0.52 + Math.sin(t*1.7 + cyc.seed*3) * 0.015,
+          0.902 - clickDip,
+          0.76 + Math.cos(t*1.3 + cyc.seed*5) * 0.018);
         wR.lerp(mouseR, mA);
       }
       aimArmSide(a, D, 'L', wL, a.armAim);
@@ -1411,7 +1444,29 @@
       var hop = (cf > 0.03 && !walking) ? Math.abs(Math.sin(t*9)) * 0.07 * cf : 0;
       var sitDrop = Math.max(0, (D.hipsY || 0.76) - seatY) * sitF;
       D.root.position.y = -sitDrop + (walking ? Math.abs(Math.sin(a.phase))*0.03 : 0) + hop;
+      // Desk reach fix: measured from the bones, a seated VRoid's shoulder
+      // sits ~0.89 from the keyboard centre while upper arm + forearm only
+      // sum to ~0.80 — the old wrist targets were physically unreachable,
+      // so the IK locked the arm dead straight and the hand hovered short
+      // and high, stretched past the keyboard toward the monitor. Sliding
+      // the whole seated figure 0.17 toward the desk (legs keep their
+      // solved angles — the feet simply land further under the desk, soles
+      // still flat) brings both the keyboard and the mouse targets inside
+      // reach with a naturally bent elbow. The beanbag seat is excluded
+      // via bagFrac: its calibration is unchanged.
+      var bagFrac = Math.max(0, Math.min(1, (a.drop - 0.10) / 0.07));
+      D.root.position.z = 0.17 * sitF * (1 - bagFrac);
       if (a.armAim > 0.01 && D.jShoulderL) aimArms(a, D, t);
+      // Relaxed finger curl, blended with the desk-work pose: fingers fold
+      // gently (proximal + middle joints, thumb less) so the hands settle
+      // onto the keys / over the mouse with fingers together, not splayed
+      // flat toward the monitor.
+      if (D.fingers && a.armAim > 0.01){
+        D.fingers.forEach(function(f){
+          var c = (f.seg === 1 ? 0.5 : 0.65) * a.armAim * (f.thumb ? 0.55 : 1);
+          poseBone(D, f.b, 0, 0, (f.side === 'L' ? 1 : -1) * c);
+        });
+      }
       if (D.vrm && D.vrm.blendShapeProxy && window.THREE_VRM && THREE_VRM.VRMSchema){
         try { D.vrm.blendShapeProxy.setValue(THREE_VRM.VRMSchema.BlendShapePresetName.Joy, cf); } catch(e){}
         try { D.vrm.update(dt); } catch(e){}
@@ -1863,7 +1918,8 @@
       while (d < -Math.PI) d += Math.PI*2;
       return from + d * Math.min(1, a);
     }
-    function animateAgent(a, dt, t){
+    function animateAgent(a, dt, t, dtW){
+      if (dtW === undefined) dtW = dt;
       var p = a.group.position;
       var moving = false;
       if (a.celebrateT > 0){
@@ -1929,15 +1985,22 @@
       var cyc = a.cyc;
       var deskWorkPose = typing && !a.cfg.beanbag;
       if (deskWorkPose){
-        cyc.t -= dt;
+        // phase / click / glance timers run on WALL-CLOCK dt (dtW), not the
+        // clamped frame dt — see frame(). In real seconds the cycle flips
+        // every 3–7 s, so any ~30 s observation window catches both the
+        // two-hands typing pose and the right-hand-on-mouse pose.
+        cyc.t -= dtW;
         if (cyc.t <= 0){
           cyc.phase = cyc.phase === 'type' ? 'mouse' : 'type';
-          cyc.t = cyc.phase === 'type' ? 2.2 + Math.random()*3.2 : 1.6 + Math.random()*2.4;
+          // both phases last 3–7 s, re-rolled every bout and offset per
+          // agent, so the typing <-> mouse cycle turns over often enough
+          // to be observed in consecutive stills without going robotic
+          cyc.t = 3 + Math.random()*4;
         }
-        cyc.clickT -= dt; if (cyc.clickT <= 0) cyc.clickT = 0.7 + Math.random()*1.1;
-        cyc.glanceT -= dt; if (cyc.glanceT <= -1.1) cyc.glanceT = 3.2 + Math.random()*3.6;
+        cyc.clickT -= dtW; if (cyc.clickT <= 0) cyc.clickT = 0.7 + Math.random()*1.1;
+        cyc.glanceT -= dtW; if (cyc.glanceT <= -1.1) cyc.glanceT = 3.2 + Math.random()*3.6;
       }
-      cyc.mouseAmt += (((deskWorkPose && cyc.phase === 'mouse') ? 1 : 0) - cyc.mouseAmt) * Math.min(1, dt*3.2);
+      cyc.mouseAmt += (((deskWorkPose && cyc.phase === 'mouse') ? 1 : 0) - cyc.mouseAmt) * Math.min(1, dtW*2.6);
       a.glanceAmt = (deskWorkPose && cyc.glanceT < 0) ? Math.sin(Math.min(1, -cyc.glanceT/1.1) * Math.PI) : 0;
       var clickPulse = (deskWorkPose && cyc.phase === 'mouse' && cyc.clickT < 0.12)
         ? Math.sin(cyc.clickT/0.12 * Math.PI) : 0;
@@ -2011,7 +2074,14 @@
       }
     }
     function frame(){
-      var dt = Math.min(clockT.getDelta(), 0.05);
+      var rawDt = clockT.getDelta();
+      var dt = Math.min(rawDt, 0.05);
+      // Wall-clock dt for the desk work-cycle timers: in a slow environment
+      // (heavy scene, throttled tab) the clamped dt above makes game time
+      // crawl at a fraction of real time, so a 3–7 s typing/mouse phase
+      // stretched to 20–45 s of real time and the pose looked frozen.
+      // The cycle must turn over in real seconds, so it runs on dtW.
+      var dtW = Math.min(rawDt, 0.5);
       var t = clockT.elapsedTime;
       if (camGoal){
         camera.position.lerp(camGoal.pos, 1 - Math.pow(0.0025, dt));
@@ -2026,7 +2096,7 @@
           var m = a.desk.screen.material;
           m.emissiveIntensity = (m.userData.cur || 0.55) + Math.sin(t*7 + i)*0.1;
         }
-        animateAgent(a, dt, t);
+        animateAgent(a, dt, t, dtW);
         updateKenney(a, dt, t);
         updateVRM(a, dt, t);
       });
