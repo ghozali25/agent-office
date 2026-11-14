@@ -2,9 +2,9 @@
 
 Prototipe standalone kantor virtual 3D: lima agen AI bergaya **VRoid** bekerja dalam satu diorama ruangan hangat. Kirim tugas, dan agen yang ditugaskan berjalan ke tempatnya, duduk, dan bekerja dengan bilah progres sampai selesai. kantor ini bekerja 24/7.
 
-![Agent Office Animation](https://raw.githubusercontent.com/ghozali25/agent-office/master/scene.gif)
+![Agent Office Animation](https://raw.githubusercontent.com/ghozali25/agent-office/master/public/scene.gif)
 
-![Screenshot Agent Office](./screenshot.png)
+![Screenshot Agent Office](public/screenshot.png)
 
 ## Fitur
 
