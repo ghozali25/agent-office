@@ -31,15 +31,21 @@
           </button>
           <div class="tsep"></div>
           <div class="cams" role="group" aria-label="Sudut kamera">
+            <button class="tbtn" type="button" data-cam="iso">Isometrik</button>
+            <button class="tbtn" type="button" data-cam="top">Atas</button>
+            <button class="tbtn" type="button" data-cam="meet">Ruang Tengah</button>
             <button class="tbtn" type="button" data-cam="lounge">Beanbag</button>
           </div>
         </div>
         <div id="bootmsg" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;z-index:4;font-weight:700;font-size:15px;color:#dfe7ee;background:radial-gradient(120% 90% at 50% 38%, #1d1e23, #07080a)">Memuat kantor 3D…</div>
-        <div id="soundHint"></div>
+        <div id="soundHint">Ketuk layar sekali untuk mengaktifkan suara “cling”</div>
         <div id="errbox" role="alert"></div>
       </div>
 
       <aside id="panel">
+        <h1>Kantor Virtual 3D</h1>
+        <p class="sub">Diorama kantor dalam satu ruangan hangat: lima agen AI bekerja di meja berkursi mustard dan beanbag besar. Jendela beralih dari siang berbukit hijau ke malam berlampu gedung — kantor ini bekerja 24/7. Setiap tugas yang kamu kirim disambut bunyi <b>“cling”</b>, dan agen penerimanya terkejut sesaat (tanda “!!” berkilau di samping kepala). Monitor hanya menyala saat agennya sedang bekerja; selebihnya layarnya tidur (sleep) seperti monitor sungguhan. Saat santai, agen bergantian <b>tidur di meja</b> (dengan efek “Zzz” melayang), <b>mengambil buku dari lemari</b> untuk dibaca — berdiri, di mejanya, atau di meja rapat — atau <b>membuat kopi</b> di mesin kopi lalu menikmatinya di meja rapat.</p>
+
         <p id="modelStatus" class="stylestatus" hidden></p>
         <button class="btn ghost" id="btnRetryVrm" type="button" hidden style="margin:0 0 13px">Coba Muat Ulang Model</button>
 
