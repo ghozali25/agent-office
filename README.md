@@ -17,7 +17,6 @@ Prototipe standalone kantor virtual 3D: lima agen AI bergaya **VRoid** bekerja d
 - **Siklus siang → senja → malam otomatis**: pemandangan jendela dan pencahayaan ruangan berubah mengikuti fase; indikator fase/jam bisa diketuk untuk melompat fase
 - Formulir kirim tugas (judul + pilihan agen; tugas untuk agen yang sibuk otomatis dialihkan ke agen yang bebas), tombol Tugas Acak, dan mode Demo Otomatis
 - Tombol Panggil Rapat: semua agen berkumpul mengelilingi meja rapat, tugas terjeda lalu dilanjutkan
-- Preset kamera (Isometrik / Atas / Ruang Tengah / Beanbag) plus orbit dan zoom bebas
 - Panel antrean tugas, roster tim yang bisa diklik untuk menyorot agen, dan log aktivitas
 
 ## Struktur
