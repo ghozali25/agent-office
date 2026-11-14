@@ -23,11 +23,12 @@ Prototipe standalone kantor virtual 3D: lima agen AI bergaya **VRoid** bekerja d
 
 Versi GitHub Pages adalah bentuk terpecah dari satu berkas HTML agar ringan dibuka:
 
-- `index.html` — kerangka halaman (5,6 KB)
-- `style.css` — seluruh gaya (7,5 KB, sudah diminifikasi)
-- `app.js` — seluruh logika aplikasi (sudah diminifikasi)
-- `three.min.js` — pustaka Three.js
-- `screenshot.png` — tangkapan layar di atas
+- `index.html` — kerangka halaman
+- `assets/css/style.css` — seluruh gaya (format terbaca, tidak diminifikasi)
+- `assets/js/app.js` — seluruh logika aplikasi (format terbaca, tidak diminifikasi)
+- `assets/js/three.min.js` — pustaka Three.js
+- `public/scene.gif` — animasi di atas
+- `public/screenshot.png` — tangkapan layar di atas
 - `assets/characters/` — model karakter yang dipanggil lewat path relatif:
   - VRoid AvatarSample (contoh resmi VRoid/pixiv): `AvatarSample_A.vrm`, `AvatarSample_B.vrm`, `AvatarSample_C.vrm` — teksturnya dikompres (total 43,6 MB → 21,9 MB) tanpa mengubah geometri/ekspresi
   - Sumber & lisensi tiap karakter: `assets/characters/CREDITS.md`
