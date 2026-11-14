@@ -1038,7 +1038,8 @@
         phase:Math.random()*6.28, task:null, spot:null, idleSpot:null, statusText:'Santai',
         tag:null, seatPos:null, homeDrop:0, bagLeaving:false, bagSeating:false, bagFrom:null,
         scene:null, sceneSeat:null, sleepAmt:0, readAmt:0, coffeeAmt:0,
-        cupHold:0, sipAmt:0, cupCyc:null, cupRest:null,
+        cupHold:0, sipAmt:0, cupCyc:null, cupRest:null, cupRestW:null, cupFromW:null, cupSettleT:0,
+        bookReturn:false, afterReturn:null, sceneCleared:false,
         bookProp:null, cupProp:null, zzz:null, propK:1 };
     }
 
@@ -1095,6 +1096,7 @@
       var pgL = box(0.165, 0.012, 0.23, 0xf7f1de, 0.9); pgL.position.set(-0.086, 0.02, 0); pgL.rotation.z = 0.16; book.add(pgL);
       var pgR = box(0.165, 0.012, 0.23, 0xf7f1de, 0.9); pgR.position.set(0.086, 0.02, 0); pgR.rotation.z = -0.16; book.add(pgR);
       book.visible = false; a.group.add(book); a.bookProp = book;
+      a.bookPages = [pgL, pgR]; // folded flat while carried, opened to read
       var cup = new THREE.Group();
       var cupBody = cyl(0.048, 0.04, 0.095, 0xffffff, 12, 0.4); cup.add(cupBody);
       var coffeeTop = cyl(0.044, 0.044, 0.012, 0x4a2c14, 12, 0.6); coffeeTop.position.y = 0.045; cup.add(coffeeTop);
@@ -1449,7 +1451,16 @@
         var hold = a.cupHold || 0;
         if (hold > 0.001 && a.cupProp){
           var cp = a.cupProp.position;
-          cupT = lapR.clone().lerp(new THREE.Vector3(cp.x - 0.10, cp.y - 0.05, cp.z - 0.05), hold);
+          // Wrist lands just beside the cup's right flank, near its
+          // vertical middle, so the palm wraps the side in a real grip
+          // (the old target sat low and behind it, shoving the hand
+          // through the cup). The reach and the retreat both bow upward
+          // in a shallow arc — sin(hold * PI) peaks mid-transition and
+          // is zero at the lap and at the grip — instead of one stiff
+          // straight lunge. While the cup is actually held (hold ~ 1)
+          // the arc vanishes, so hand and cup travel as one.
+          cupT = lapR.clone().lerp(new THREE.Vector3(cp.x - 0.085, cp.y - 0.015, cp.z - 0.02), hold);
+          cupT.y += Math.sin(Math.min(1, hold) * Math.PI) * 0.05;
         }
         wR.addScaledVector(cupT, wCof);
         hR.addScaledVector(new THREE.Vector3(-0.42, -1, -0.12), wCof);
@@ -1541,7 +1552,7 @@
       // startle snap: while the cling reaction runs, the head jerks up and
       // back with a tiny fast tremble, then settles into the normal pose
       var stEnv = a.startleEnv || 0;
-      poseBone(D, B.head, -0.10*sitF + Math.sin(t*0.8 + a.phase)*0.03*(1 - slpF) + (a.glanceAmt || 0) * lean * 0.26 - stEnv*0.34 + 0.58*slpF + 0.36*rdF - 0.24*(a.sipAmt || 0) + Math.sin(t*1.15 + a.phase)*0.025*slpF,
+      poseBone(D, B.head, -0.10*sitF + Math.sin(t*0.8 + a.phase)*0.03*(1 - slpF) + (a.glanceAmt || 0) * lean * 0.26 - stEnv*0.34 + 0.58*slpF + 0.36*rdF - 0.07*(a.sipAmt || 0) + Math.sin(t*1.15 + a.phase)*0.025*slpF,
         Math.sin(t*0.45 + a.phase*2)*0.16*(1 - sitF*0.5)*(1 - 0.85*slpF - 0.4*rdF) + (stEnv > 0 ? Math.sin(t*42 + a.phase)*0.07*stEnv : 0), stEnv*0.14 + slpF*0.18);
       var armDown = (1.22 - cf * 2.35) * (1 - 0.38*rdF) - 0.10*slpF;
       var armFwd = 0.12 + 0.5*sitF + 0.62*slpF + 0.34*rdF;
@@ -1617,6 +1628,43 @@
       var ml = Math.hypot(mx, mz) || 1;
       return new THREE.Vector3(TABLE_C.x + mx/ml*2.05, 0, TABLE_C.z + mz/ml*2.05);
     }
+    // Waypoints that walk AROUND the meeting table: when the straight
+    // line from->to would pass within 1.5 of the table centre, route
+    // along an arc of radius 2.05 around it (the shorter way round),
+    // in angular steps small enough that every chord of the arc stays
+    // at least ~1.85 from the centre — far outside the tabletop's
+    // 0.86 half-diagonal plus a body radius. A single midpoint detour
+    // point was NOT enough: on near-opposite crossings its own chords
+    // still sliced across the table corners.
+    function tableArc(from, to){
+      if (!detourPoint(from, to)) return [];
+      var a0 = Math.atan2(from.x - TABLE_C.x, from.z - TABLE_C.z);
+      var a1 = Math.atan2(to.x - TABLE_C.x, to.z - TABLE_C.z);
+      var sweep = a1 - a0;
+      while (sweep > Math.PI) sweep -= Math.PI * 2;
+      while (sweep < -Math.PI) sweep += Math.PI * 2;
+      var steps = Math.max(1, Math.ceil(Math.abs(sweep) / 0.8));
+      var pts = [];
+      for (var i = 1; i < steps; i++){
+        var ang = a0 + sweep * (i / steps);
+        pts.push(new THREE.Vector3(TABLE_C.x + Math.sin(ang) * 2.05, 0, TABLE_C.z + Math.cos(ang) * 2.05));
+      }
+      if (!pts.length){ var dp = detourPoint(from, to); if (dp) pts.push(dp); }
+      return pts;
+    }
+    // Cubic-bezier path for the coffee cup between its tabletop rest
+    // point and the mouth: the first control point lifts the cup
+    // straight off the table and the second keeps it high until just
+    // before the mouth, so the rim never drags across the tabletop or
+    // swings low through the chest on its way up or down.
+    function cupArc(restW, mouthW, u){
+      var v = 1 - u;
+      var p1y = restW.y + 0.22, p2y = mouthW.y + 0.08;
+      return new THREE.Vector3(
+        v*v*v*restW.x + 3*v*v*u*restW.x + 3*v*u*u*mouthW.x + u*u*u*mouthW.x,
+        v*v*v*restW.y + 3*v*v*u*p1y + 3*v*u*u*p2y + u*u*u*mouthW.y,
+        v*v*v*restW.z + 3*v*v*u*restW.z + 3*v*u*u*mouthW.z + u*u*u*mouthW.z);
+    }
     function sendTo(a, dest, via, finalYaw, onArrive){
       var pts = [];
       var cur = a.group.position;
@@ -1649,9 +1697,31 @@
           } else if (a.sit <= 0.4) a.bagLeaving = false;
         }
       }
-      var det = detourPoint(cur, finalDest);
+      // Leaving a meeting-table seat: never stride straight out through
+      // the table. First step BACK, away from the table centre, then let
+      // the table detour (computed from that backed-off point) route the
+      // walk around the table's end. Applies to every departure from a
+      // stool — coffee and reading scenes ending, meetings dispersing,
+      // tasks calling — because they all funnel through sendTo.
+      var exitPts = [];
+      var fromPt = cur;
+      var atSeat = null, destIsSeat = false;
+      for (var si = 0; si < meeting.seats.length; si++){
+        var ss = meeting.seats[si];
+        if (Math.hypot(cur.x - ss.pos.x, cur.z - ss.pos.z) < 0.45) atSeat = ss;
+        if (finalDest.distanceTo(ss.pos) < 0.05) destIsSeat = true;
+      }
+      if (atSeat && !destIsSeat){
+        var awayV = new THREE.Vector3(cur.x - TABLE_C.x, 0, cur.z - TABLE_C.z);
+        if (awayV.lengthSq() < 0.01) awayV.set(0, 0, 1); awayV.normalize();
+        var backPt = cur.clone().addScaledVector(awayV, 0.6);
+        exitPts.push(backPt);
+        fromPt = backPt;
+      }
+      var arc = (via && via.length) ? [] : tableArc(fromPt, finalDest);
+      pts = exitPts.concat(pts);
       if (via) via.forEach(function(v){ pts.push(v.clone()); });
-      if (det && !via) pts.push(det);
+      arc.forEach(function(v){ pts.push(v); });
       pts.push(finalDest.clone());
       a.path = pts; a.finalYaw = finalYaw; a.onArrive = arrive;
       a.sitTarget = 0; a.dropTarget = 0;
@@ -1685,9 +1755,36 @@
       // Coffee-cycle state goes with the scene: a cup interrupted mid-sip
       // is cleared away with the rest of the scene props (never carried
       // into work), and the next coffee scene starts its cycle fresh.
-      a.cupCyc = null; a.cupRest = null; a.cupHold = 0; a.sipAmt = 0;
+      a.cupCyc = null; a.cupRest = null; a.cupRestW = null; a.cupFromW = null; a.cupSettleT = 0; a.cupHold = 0; a.sipAmt = 0;
+      a.bookReturn = false; a.afterReturn = null; // leaveScene re-arms these after this reset when a book is still out
       if (a.cupProp) a.cupProp.rotation.set(0, 0, 0);
       if (a.sceneSeat){ a.sceneSeat.taken = null; a.sceneSeat = null; }
+    }
+    // Scene teardown with manners for the book: when a reading scene is
+    // interrupted (task arrives, meeting called, rotation) while the book
+    // is out, the book first CLOSES — endScene drops readAmt, so the
+    // carry pose takes over — and is CARRIED BACK to the bookshelf; only
+    // once it has been put away does the caller's next step run. With no
+    // book out this is endScene + proceed, synchronously. A second
+    // interruption while the return walk is already running simply
+    // replaces the pending step: the newest instruction wins.
+    function leaveScene(a, proceed){
+      var bookOut = !!(a.bookProp && a.bookProp.visible &&
+        ((a.scene && a.scene.kind === 'read') || a.bookReturn));
+      endScene(a);
+      if (!bookOut){ proceed(); return; }
+      a.bookProp.visible = true; // stays in hand, closed, for the walk back
+      a.afterReturn = proceed;
+      if (a.bookReturn) return;
+      a.bookReturn = true;
+      a.statusText = 'Mengembalikan buku';
+      var shelf = standSpots[1]; // in front of the bookshelf
+      sendTo(a, shelf.pos, shelf.via, shelf.yaw, function(){
+        if (a.bookProp) a.bookProp.visible = false;
+        a.bookReturn = false;
+        var p = a.afterReturn; a.afterReturn = null;
+        if (p) p();
+      });
     }
     function claimSeat(a){
       for (var i = 0; i < meeting.seats.length; i++){
@@ -1775,6 +1872,12 @@
       });
     }
     function goIdle(a){
+      // A book that is out is closed and returned to the shelf first;
+      // the fresh scene is picked only once it has been put away.
+      if (a.bookProp && a.bookProp.visible && a.scene && a.scene.kind === 'read'){
+        leaveScene(a, function(){ goIdle(a); });
+        return;
+      }
       endScene(a);
       if (a.cfg.beanbag){
         // Fajar's beanbag is work-only now: idle time is reading at the
@@ -1893,7 +1996,9 @@
       tasks.push(t); a.task = t;
       a.pendingIdle = false; a.celebrateT = 0;
       freeSpot(a);
-      endScene(a); // wake up / put the book & cup away before heading to work
+      // Scene teardown happens in leaveScene below: a cup is cleared
+      // with the scene, and a book that is out is closed and carried
+      // back to the shelf before the agent heads to its desk.
       if (!silent){
         playCling();
         // Startle reaction on the exact event that plays the cling (manual
@@ -1905,8 +2010,10 @@
         a.startleT = 0.7; a.bangT = 1.0;
       }
       log('Tugas baru untuk ' + a.cfg.name + ': ' + title);
-      sendTo(a, a.home.pos, [], a.home.yaw, function(){ startWork(a, t); });
-      a.statusText = a.cfg.beanbag ? 'Menuju beanbag' : 'Menuju meja';
+      leaveScene(a, function(){
+        a.statusText = a.cfg.beanbag ? 'Menuju beanbag' : 'Menuju meja';
+        sendTo(a, a.home.pos, [], a.home.yaw, function(){ startWork(a, t); });
+      });
       renderTasks();
       return t;
     }
@@ -1932,6 +2039,19 @@
     }, 2500);
 
     /* ================= meeting (around the coffee table) ================= */
+    // Sends an agent to its claimed meeting seat once BOTH the seat is
+    // claimed and its previous scene is fully cleared — an agent whose
+    // book is being returned to the shelf first only sets off when
+    // leaveScene's callback lands here.
+    function sendToMeeting(a){
+      if (!a.meetSeat || !a.sceneCleared) return;
+      a.sceneCleared = false;
+      var seat = a.meetSeat;
+      a.statusText = 'Menuju ruang tengah';
+      sendTo(a, seat.pos, seat.via, seat.yaw, function(){
+        a.state = 'meeting'; a.sitTarget = 1; a.dropTarget = seat.drop; a.statusText = 'Rapat';
+      });
+    }
     function startMeeting(){
       if (meetingActive) { log('Rapat sedang berjalan — tim masih berkumpul di ruang tengah.'); return; }
       meetingActive = true;
@@ -1939,18 +2059,18 @@
       log('Rapat dipanggil — semua agen ke ruang tengah.');
       var shuffled = meeting.seats.slice();
       agents.forEach(function(a, i){
-        endScene(a); // scenes end for the meeting FIRST: props away and any
-        // scene-claimed seat released, so seat picking below sees true occupancy
+        a.sceneCleared = false;
+        leaveScene(a, function(){ // scenes end for the meeting FIRST: props
+          a.sceneCleared = true;  // away and any scene-claimed seat released,
+          sendToMeeting(a);       // so seat picking below sees true occupancy
+        });
         var seat = shuffled[i % shuffled.length];
         if (seat.taken && seat.taken !== a){ seat = shuffled.find(function(s){ return !s.taken; }) || seat; }
         seat.taken = a; a.meetSeat = seat;
         a.pendingIdle = false; a.celebrateT = 0;
         if (a.task){ a.task.status = 'Jeda — rapat'; }
         freeSpot(a);
-        a.statusText = 'Menuju ruang tengah';
-        sendTo(a, seat.pos, seat.via, seat.yaw, function(){
-          a.state = 'meeting'; a.sitTarget = 1; a.dropTarget = seat.drop; a.statusText = 'Rapat';
-        });
+        sendToMeeting(a);
       });
       renderTasks();
       setTimeout(endMeeting, 16000);
@@ -2332,78 +2452,137 @@
       a.readAmt = (a.readAmt || 0) + (rdTgt - (a.readAmt || 0)) * Math.min(1, dtW * 3);
       var cofTgt = (a.scene && a.scene.kind === 'coffee' && a.scene.phase === 'drink' && !a.path.length && a.sit > 0.6) ? 1 : 0;
       a.coffeeAmt = (a.coffeeAmt || 0) + (cofTgt - (a.coffeeAmt || 0)) * Math.min(1, dtW * 3);
-      // Hand props ride at chest height (lower when seated), tilted up
-      // toward the reader; anchors per cast set in refreshVisibility.
+      // The book has two honest states, blended by a.readAmt:
+      // CARRIED (readAmt ~ 0): CLOSED (pages folded flat) and gripped in
+      // the right hand down at the agent's side — the anchor is taken
+      // from the hand bone itself whenever the model is loaded, so the
+      // book follows the hand exactly through the stride swing instead
+      // of floating in front of the body. READING (readAmt ~ 1): open,
+      // up in front of the chest with both hands on its bottom corners
+      // (the arm IK aims at the same anchor). readAmt only rises once
+      // the agent has ARRIVED at the reading spot, so the book opens on
+      // arrival; it closes again the moment the scene ends, before any
+      // walking resumes (the return-to-shelf walk in leaveScene is all
+      // carry pose).
       if (a.bookProp && a.bookProp.visible){
-        var bkY = a.bookY || [0.92, 0.76];
-        a.bookProp.position.set(0, bkY[0] + (bkY[1] - bkY[0]) * a.sit, a.bookZ || 0.31);
-        a.bookProp.rotation.x = -0.52;
+        var bkY = a.bookY || [1.42, 0.95];
+        var readY = bkY[0] + (bkY[1] - bkY[0]) * a.sit;
+        var openA = a.readAmt || 0;
+        var swB = a._moving ? Math.sin(a.phase) : 0;
+        var carP = new THREE.Vector3(-0.33, 1.04 - a.sit * 0.06, 0.07 + swB * 0.07);
+        if (openA < 0.99 && a.vrmData && a.vrmData.bones && a.vrmData.bones.handR){
+          var hwB = new THREE.Vector3();
+          a.vrmData.bones.handR.getWorldPosition(hwB);
+          a.group.updateWorldMatrix(true, false);
+          var hlB = a.group.worldToLocal(hwB);
+          carP.set(hlB.x - 0.02, hlB.y - 0.04, hlB.z + 0.03);
+        }
+        var readP = new THREE.Vector3(0, readY, a.bookZ || 0.46);
+        a.bookProp.position.copy(carP.lerp(readP, openA));
+        var carRx = -1.18 + swB * 0.16;
+        a.bookProp.rotation.set(carRx + (-0.52 - carRx) * openA, 0, 0.10 * (1 - openA));
+        if (a.bookPages){
+          a.bookPages[0].rotation.z = 0.02 + 0.14 * openA;
+          a.bookPages[1].rotation.z = -0.02 - 0.14 * openA;
+        }
       }
-      // Coffee cup: in transit (the walk from the machine) it rides at the
-      // fixed carry anchor like before. Once the agent is SEATED at the
-      // meeting table (drink phase), the cup lives ON the table — its base
-      // resting on the tabletop at a.cupRest — and a drinking cycle runs:
-      // rest a few seconds (hands relaxed), reach & grasp, lift to the
-      // mouth, sip ~1 s with the cup tipped and the head tipped back,
-      // lower it back onto the table, release, repeat with a fresh random
-      // pause. a.cupHold / a.sipAmt are consumed by updateVRM: the right
-      // hand tracks the cup through the IK, the head tips back to sip.
+      // Coffee cup: in transit (the walk from the machine) it rides at
+      // the fixed carry anchor. Once the agent is SEATED at the meeting
+      // table (drink phase) the whole cycle is computed in WORLD space,
+      // and the cup has exactly three legal states: (1) resting with its
+      // base ON the tabletop at a.cupRestW — a point on this seat's side
+      // of the table, clamped inside the tabletop rectangle (top 1.5 x
+      // 0.85 at y 0.48) so it can never land on the floor or the rug;
+      // (2) glued to the right hand along the pick-up / set-down arcs;
+      // (3) at the mouth for the sip: rim a few cm in front of the face
+      // and just below the chin, cup still nearly upright (tilt follows
+      // a.sipAmt, max ~17 deg — a sip, never a pour over the face).
+      // Cycle: rest -> reach (the HAND travels to the cup; the cup does
+      // not move until the hand has arrived) -> lift along a bezier that
+      // rises off the table before curving to the mouth -> sip -> lower
+      // along the same arc -> release (the hand lets go only once the
+      // base is back on the tabletop) -> rest, repeat with a fresh
+      // random pause. a.cupHold / a.sipAmt are consumed by updateVRM.
       var cupSettled = a.cupProp && a.cupProp.visible && a.scene && a.scene.kind === 'coffee' &&
         a.scene.phase === 'drink' && !a.path.length && a.sit > 0.6;
       if (a.cupProp && a.cupProp.visible){
         if (cupSettled){
-          if (!a.cupRest){
-            // World point on the tabletop (surface y 0.48; the cup group's
-            // origin sits half the scaled cup height — 0.064 — above its
-            // base), pulled toward this agent's seat from the table centre
-            // and converted into group space; a touch to the right side.
-            var ccW = new THREE.Vector3(TABLE_C.x, 0, TABLE_C.z);
-            var sdW = a.group.position.clone().sub(ccW); sdW.y = 0;
-            if (sdW.lengthSq() < 0.01) sdW.set(0, 0, 1); sdW.normalize();
-            var rwW = ccW.clone().addScaledVector(sdW, 0.36); rwW.y = 0.48 + 0.064;
+          if (!a.cupRestW){
+            // Rest point ON the tabletop in front of THIS seat: from the
+            // table centre toward the seat, shifted to the drinker's
+            // right, then clamped inside the tabletop inset by the cup
+            // radius + margin — on the surface for every stool.
+            var cenW = new THREE.Vector3(TABLE_C.x, 0, TABLE_C.z);
+            var seatW = (a.sceneSeat ? a.sceneSeat.pos : a.group.position).clone(); seatW.y = 0;
+            var dirS = seatW.clone().sub(cenW);
+            if (dirS.lengthSq() < 0.01) dirS.set(0, 0, 1); dirS.normalize();
+            var restW = cenW.clone().addScaledVector(dirS, 0.52);
+            restW.addScaledVector(new THREE.Vector3(-dirS.z, 0, dirS.x), -0.13);
+            restW.x = Math.max(TABLE_C.x - 0.55, Math.min(TABLE_C.x + 0.55, restW.x));
+            restW.z = Math.max(TABLE_C.z - 0.24, Math.min(TABLE_C.z + 0.24, restW.z));
+            restW.y = 0.48 + 0.064; // tabletop + half the scaled cup height
+            a.cupRestW = restW;
+            // Settle glide: the cup eases from the carry anchor down
+            // onto its tabletop point the first time the agent sits —
+            // it never snaps across the gap.
             a.group.updateMatrixWorld(true);
-            a.cupRest = a.group.worldToLocal(rwW);
-            a.cupRest.x -= 0.13;
+            a.cupFromW = a.group.localToWorld(a.cupProp.position.clone());
+            a.cupSettleT = 0.45;
+          }
+          // Sip target in world space: from the head bone when the
+          // model is loaded (mouth ~0.10 above the skull-base bone), the
+          // cup CENTRE stops 0.15 below the mouth and 0.24 in front of
+          // the head axis — rim just under the chin, a few cm clear of
+          // the face, never up at nose height covering it.
+          var mouthW;
+          if (a.vrmData && a.vrmData.bones && a.vrmData.bones.head){
+            var hdW = new THREE.Vector3();
+            a.vrmData.bones.head.getWorldPosition(hdW);
+            var fwW = new THREE.Vector3(Math.sin(a.yaw), 0, Math.cos(a.yaw));
+            mouthW = hdW.clone().addScaledVector(fwW, 0.24);
+            mouthW.addScaledVector(new THREE.Vector3(-fwW.z, 0, fwW.x), 0.05);
+            mouthW.y = hdW.y + 0.10 - 0.15;
+          } else {
+            mouthW = a.group.localToWorld(new THREE.Vector3(-0.07, 1.30, 0.28));
           }
           var cyc2 = a.cupCyc || (a.cupCyc = { phase:'rest', t:1.2 + Math.random()*2.5 });
           cyc2.t -= dtW;
-          var mouthP = { x:-0.10, y:1.40, z:0.36 };
-          var cupPos = a.cupRest, cupTilt = 0, holdTgt = 0, sipTgt = 0;
-          if (cyc2.phase === 'rest'){
-            if (cyc2.t <= 0){ cyc2.phase = 'reach'; cyc2.t = 0.45; }
+          var cupW = a.cupRestW.clone(), holdTgt = 0, sipTgt = 0;
+          if ((a.cupSettleT || 0) > 0){
+            a.cupSettleT -= dtW;
+            var su2 = 1 - Math.max(0, a.cupSettleT) / 0.45; su2 = su2*su2*(3 - 2*su2);
+            cupW = a.cupFromW.clone().lerp(a.cupRestW, su2);
+            cupW.y += Math.sin(su2 * Math.PI) * 0.04;
+            cyc2.phase = 'rest'; cyc2.t = Math.max(cyc2.t, 0.6);
+          } else if (cyc2.phase === 'rest'){
+            if (cyc2.t <= 0){ cyc2.phase = 'reach'; cyc2.t = 0.5; }
           } else if (cyc2.phase === 'reach'){
-            holdTgt = 1;
-            if (cyc2.t <= 0){ cyc2.phase = 'lift'; cyc2.t = 0.6; }
+            holdTgt = 1; // hand travels to the cup; the cup does not move yet
+            if (cyc2.t <= 0){ cyc2.phase = 'lift'; cyc2.t = 0.7; }
           } else if (cyc2.phase === 'lift'){
             holdTgt = 1;
-            var lpA = 1 - Math.max(0, cyc2.t) / 0.6; lpA = lpA*lpA*(3 - 2*lpA);
-            cupPos = new THREE.Vector3(
-              a.cupRest.x + (mouthP.x - a.cupRest.x) * lpA,
-              a.cupRest.y + (mouthP.y - a.cupRest.y) * lpA + Math.sin(lpA * Math.PI) * 0.05,
-              a.cupRest.z + (mouthP.z - a.cupRest.z) * lpA);
-            cupTilt = -0.18 * lpA;
+            var lu2 = 1 - Math.max(0, cyc2.t) / 0.7; lu2 = lu2*lu2*(3 - 2*lu2);
+            cupW = cupArc(a.cupRestW, mouthW, lu2);
             if (cyc2.t <= 0){ cyc2.phase = 'sip'; cyc2.t = 1.0 + Math.random()*0.4; }
           } else if (cyc2.phase === 'sip'){
             holdTgt = 1; sipTgt = 1;
-            cupPos = new THREE.Vector3(mouthP.x, mouthP.y, mouthP.z);
-            cupTilt = -0.52;
-            if (cyc2.t <= 0){ cyc2.phase = 'lower'; cyc2.t = 0.6; }
+            cupW = mouthW.clone();
+            if (cyc2.t <= 0){ cyc2.phase = 'lower'; cyc2.t = 0.7; }
           } else if (cyc2.phase === 'lower'){
             holdTgt = 1;
-            var lpB = Math.max(0, cyc2.t) / 0.6; lpB = lpB*lpB*(3 - 2*lpB);
-            cupPos = new THREE.Vector3(
-              a.cupRest.x + (mouthP.x - a.cupRest.x) * lpB,
-              a.cupRest.y + (mouthP.y - a.cupRest.y) * lpB + Math.sin(lpB * Math.PI) * 0.05,
-              a.cupRest.z + (mouthP.z - a.cupRest.z) * lpB);
-            cupTilt = -0.18 * lpB;
-            if (cyc2.t <= 0){ cyc2.phase = 'release'; cyc2.t = 0.4; }
-          } else { // release: hand lets go, then a fresh random rest
+            var uu2 = Math.max(0, cyc2.t) / 0.7; uu2 = uu2*uu2*(3 - 2*uu2);
+            cupW = cupArc(a.cupRestW, mouthW, uu2);
+            if (cyc2.t <= 0){ cyc2.phase = 'release'; cyc2.t = 0.45; }
+          } else { // release: base already on the table; now the hand lets go
             if (cyc2.t <= 0){ cyc2.phase = 'rest'; cyc2.t = 2.5 + Math.random()*3.5; }
           }
-          a.cupHold += (holdTgt - a.cupHold) * Math.min(1, dtW * 7);
+          a.cupHold += (holdTgt - a.cupHold) * Math.min(1, dtW * 6);
           a.sipAmt += (sipTgt - a.sipAmt) * Math.min(1, dtW * 6);
-          a.cupProp.position.copy(cupPos);
-          a.cupProp.rotation.set(cupTilt, 0, 0);
+          a.group.updateMatrixWorld(true);
+          a.cupProp.position.copy(a.group.worldToLocal(cupW));
+          // Sip tilt follows sipAmt only: upright while travelling, at
+          // most ~17 deg toward the mouth while actually sipping.
+          a.cupProp.rotation.set(-0.30 * (a.sipAmt || 0), 0, 0);
         } else {
           var cpP = a.cupPos || { x:0.24, y:0.97, ys:0.82, z:0.27 };
           a.cupProp.position.set(cpP.x, cpP.y + (cpP.ys - cpP.y) * a.sit, cpP.z);
