@@ -2,8 +2,7 @@
 
 Prototipe standalone kantor virtual 3D: lima agen AI bergaya **VRoid** (anime proporsi normal) bekerja dalam satu diorama ruangan hangat. Kirim tugas, dan agen yang ditugaskan berjalan ke tempatnya, duduk, dan bekerja dengan bilah progres sampai selesai. Setiap tugas yang masuk disambut bunyi **"cling"**, dan agen yang sedang santai akan **terkejut** (lencana "!!" + ekspresi kaget) sebelum mulai bekerja. Jendela kantor beralih dari siang berbukit hijau ke malam berlampu gedung — kantor ini bekerja 24/7.
 
-![video Agent Office](prototype-agent-office-3D.mp4)
-
+[▶ Watch Agent Office 3D](./prototype-agent-office-3D.mp4)
 
 ![Screenshot Agent Office](screenshot.png)
 
